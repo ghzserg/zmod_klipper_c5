@@ -1,0 +1,378 @@
+# [Setup](#installing-the-mod)
+
+---
+
+## Restoring Printer to Factory Settings (Required for Mod Installation)
+
+0. [Uninstall KlipperMod](https://github.com/xblax/flashforge_ad5m_klipper_mod/blob/master/docs/UNINSTALL.md) if previously installed.
+1. Reset the printer to default settings.
+2. Format a USB drive to FAT/FAT16/FAT32(MBR).
+3. Copy the appropriate file from the [Native firmware](/Native_FW/) to the USB root directory:
+
+    - [Adventurer5M-3.1.9-2.2.3-20250807-Factory.tgz](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-3.1.9-2.2.3-20250807-Factory.tgz) for FF5M
+    - [Adventurer5MPro-3.1.3-2.2.3-20250107-Factory.tgz](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-3.1.3-2.2.3-20250107-Factory.tgz) for FF5M **Pro** 
+    - [AD5X-1.1.7-1.1.0-3.0.6-20250912-Factory.tgz](https://github.com/ghzserg/FF/releases/download/R/AD5X-1.1.7-1.1.0-3.0.6-20250912-Factory.tgz) for AD5X
+    - [Creator5-1.9.9-1.3.0-20260907.tgz](https://github.com/ghzserg/FF/releases/download/R/Creator5-1.9.9-1.3.0-20260907.tgz) for Creator 5
+    - [Creator5Pro-1.9.9-1.3.0-20260907.tgz](https://github.com/ghzserg/FF/releases/download/R/Creator5Pro-1.9.9-1.3.0-20260907.tgz) for Creator 5 Pro
+
+    > Important: **Do not unpack the files!**
+
+4. Power off the printer.
+5. Insert the USB drive into the printer.
+6. Power on the printer.
+7. Wait for the stock firmware installation to complete. _If it takes too long or does not install at all, use a different flash drive._
+8. Configure Wi-Fi or LAN *new beaver*
+9. Perform the initial calibrations.
+10. Get the latest printer updates or install firmware 1.1.7 for AD5X, or 3.2.3 for [AD5M](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-3.2.3-2.2.3-20251016-Factory.tgz)/[AD5M Pro](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-3.2.3-2.2.3-20251017-Factory.tgz) if you don't want the printer to [measure the bed center before each print](/FAQ/#before-each-print-the-printer-measures-the-center-of-the-bed)
+
+---
+
+## Installing the Mod
+
+[Video](https://www.youtube.com/watch?v=2sfb2OtY7wM)
+
+<div class="video-embed">
+    <iframe width="560" height="315" src="https://www.youtube.com/embed/2sfb2OtY7wM" title="Install zmod to AD5X / AD5M / AD5M Pro @Belovv_ilya" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+</div>
+
+1. **[Restore the printer to factory settings](/Setup/#restoring-printer-to-factory-settings-required-for-mod-installation).**  [AD5X Warning](/Setup/#ad5x-warning)
+2. Format a USB drive to FAT/FAT16/FAT32(MBR).
+3. Copy the [mod file](https://github.com/ghzserg/zmod/releases/) to the USB root directory:
+
+    - For FF5M: Adventurer5M-**zmod**-*.tgz
+    - For FF5M Pro: Adventurer5MPro-**zmod**-\*.tgz
+    - For [AD5X](/AD5X/): AD5X-**zmod**-*.tgz
+    - For Creator 5: Creator5-**zmod**-\*.tgz
+    - For Creator 5 Pro: Creator5Pro-**zmod**-\*.tgz
+
+    _Even better: put all 5 files on the flash drive — the printer will pick the right one itself._
+
+    > Important: **Do not unpack the files!**
+
+4. Power off the printer.
+5. Insert the USB drive.
+6. Power on the printer.
+7. Wait for the mod installation to complete.
+
+   <img width="800" height="480" alt="install" src="../../images/9d6b9ad7-e9ec-4bc2-bd8f-54c945b5add5.png" />
+   
+   <img width="800" height="480" alt="screenshot" src="../../images/19d66329-72f9-4e92-aba6-35b7820ce9a0.png" />
+   
+   Installation on the AD5X/Creator 5/Creator 5 Pro can take up to 40 minutes. _If it takes too long or does not install at all, use a different flash drive._
+
+   If you missed the window with the green check mark and the printer rebooted automatically, the standard printer screen will load; in this case you can go straight to step 11.
+
+8. Remove the USB drive.
+9. Power off the printer.
+10. Power on the printer.
+11. **Open the printer's IP address in the browser**
+    <img width="800" height="480" alt="main" src="../../images/a0466fa8-03e8-458d-8cc5-c1efb8f565ac.png" />
+    <img width="800" height="480" alt="ip" src="../../images/1d7dd5fa-86f4-4b1a-bd42-364619b20229.png" />
+    
+    If the web interface doesn't open, the stock firmware has disabled the mod. To enable it, copy the file:
+
+    - [AD5X-enable-zmod.tgz](https://github.com/ghzserg/FF/releases/download/R/AD5X-enable-zmod.tgz)
+    - [Creator5-enable-zmod.tgz](https://github.com/ghzserg/FF/releases/download/R/Creator5-enable-zmod.tgz)
+    - [Creator5Pro-enable-zmod.tgz](https://github.com/ghzserg/FF/releases/download/R/Creator5Pro-enable-zmod.tgz)
+
+12. Translate the mod into your language.
+
+    <img width="564" height="583" alt="{8E14F84D-E8D1-4129-B192-AA335243A3D9}" src="../../images/e6dd3f8a-3cc3-4a05-b5fb-ad8ba372ede6.png" />
+    
+    Or type in the console: ```LANG LANG=en```
+    
+    <img width="881" height="502" alt="image" src="../../images/cf3f797d-80e0-4864-85b4-cd28886590f4.png" />
+    
+    Set your timezone: ```SET_TIMEZONE ZONE=Europe/London``` (run `SET_TIMEZONE` without parameters to list zones). [Details](/System/#set_timezone)
+
+13. Configure the mod
+
+    <img width="558" height="219" alt="{B34D2AF2-F2A6-433D-B9F8-86A83389D5A7}" src="../../images/a79ec692-a284-4cb8-a0ad-3be10f33d813.png" />
+    
+    This shows parameters used at print start, print end, and global settings. It is recommended to just review the settings — do not change them unless necessary. The description for each parameter can be [found here](/Global/).
+
+    <img width="561" height="443" alt="{623507C1-D3AB-4FEF-9A92-E949A85DCB49}" src="../../images/3a8028bf-b078-4edc-827b-07e9d49c52f9.png" />
+
+    You must proceed to the last screen and press `Ok` or `Reboot`. If you skip this, the window will appear on every boot.
+
+    <img width="564" height="228" alt="{BCEBDCCC-0703-46F3-8B7B-3BC58E78F27A}" src="../../images/72d386a4-18ba-40a9-8f85-a6109a4e4c57.png" />
+
+    To display this window again later, type in the console: `GLOBAL`
+
+14. Go to `Settings` → `Firmware Updates`  
+15. Click `Check for Updates`, and wait until the check completes  
+16. Click **Update** and update all components.
+
+    <img width="1239" height="535" alt="image" src="../../images/b42c4ce9-1c0a-45c0-a20c-36919a27d648.png" />
+
+    If many errors appear — this is normal. Plugins are not part of the firmware and are downloaded separately. Click `Check for Updates` again, then restore and update each module individually. The printer will reboot during the process.
+
+    <img width="671" height="844" alt="image" src="../../images/d6fe3ad0-64be-4c07-8f5e-53647a6bd6ee.png" />
+
+17. Enable the [recommendations plugin](https://github.com/ghzserg/recommend/blob/main/Readme.md)
+
+    <img width="560" height="224" alt="{E27E192D-3FC2-49AC-BEAF-F7B574FFEF45}" src="../../images/dade8a2e-fc67-4df5-aad4-85cc5cd81d66.png" />
+
+    Or enter in the console: ```ENABLE_PLUGIN name=recommend```
+
+    <img width="864" height="87" alt="image" src="../../images/ca96c67f-cc58-4655-8fdf-9554d1a489a3.png" />
+
+18. [Send Files via "Octo/Klipper" for Printing](/Recommendations/#send-files-via-octoklipper-for-printing)
+
+    You **need to switch to the Octo/Klipper protocol**:
+    
+    - **Host Type**: `Octo/Klipper`
+    - **Printer Agent**: `Moonraker`
+
+    For Creator 5 / Creator 5 Pro / AD5X:
+
+    - **Hostname**: `IP_printer`
+
+    <img width="612" height="447" alt="{D625ED9D-902D-4412-A99E-20FB0C5ED85F}" src="../../images/1c26beca-9aff-4c7c-846d-273efa8624f8.png" />
+
+    For FF5M / FF5M Pro:
+
+    - **Hostname**: `IP_printer:7125`
+    - **Device UI**: `IP_printer` or `IP_printer:80`
+    
+    <img width="678" height="471" alt="{8FB1D8A5-A02F-41A8-8309-CD556007FD1B}" src="../../images/a9c3fc5e-3ec0-41ed-bbd7-779ee210c9a1.png" />
+    <img width="473" height="395" alt="image" src="../../images/ca4c5330-dc88-4372-a3c8-51527ae76146.png" />
+
+
+19. [Ready-made profiles](https://github.com/ghzserg/zmod_preprocess/tree/main/profiles/)
+
+    The entire start code should be replaced with this:
+    ```
+    START_PRINT EXTRUDER_TEMP=[nozzle_temperature_initial_layer] BED_TEMP=[bed_temperature_initial_layer_single]
+    M190 S[bed_temperature_initial_layer_single]
+    M104 S[nozzle_temperature_initial_layer] T{single_extruder_multi_material ? 0 : initial_extruder}
+    SET_PRINT_STATS_INFO TOTAL_LAYER=[total_layer_count]
+    ```
+    
+    ```START_PRINT EXTRUDER_TEMP=... BED_TEMP=...``` should be written on one line
+    
+    The end code should be this:
+
+    ```END_PRINT```
+    
+    <img width="612" height="443" alt="image" src="../../images/0dfd8840-c183-4d33-92aa-46f882b8c32c.png" /> 
+    
+    Code for before changing the layer to this one:
+
+    ```SET_PRINT_STATS_INFO CURRENT_LAYER={layer_num + 1}``` 
+    
+    <img width="449" height="153" alt="image" src="../../images/705fb49e-2c6b-451b-9b99-9d8d1f0e80f8.png" />
+
+20. [Enable MD5 verification](/Recommendations/#enable-md5-checksum-control)
+
+    <img width="476" height="355" alt="image" src="../../images/0b59a617-5613-4def-aa01-7fe038898863.png" />
+
+21. [Read the recommendations](/Recommendations/)
+22. [Read the FAQ](/FAQ/)
+23. [Calibrate the printer](/SetupCalibrations/)
+24. Read the specifics of [AD5X](/AD5X/) and [Creator 5 Pro](/C5PRO/)
+
+### AD5X Warning
+
+[@Khamai](https://t.me/Khamai)
+
+After installing the Native Firmware, the print head may not be correctly positioned against the filament receiver (the receiver shutter may not be fully closed, filament may be pushed onto the table, etc.).
+
+[Via the engineering menu on the stock firmware](/AD5X/#setting-up-the-basket-on-the-ad5x-stock-firmware)
+
+If you encounter this issue, you need to calibrate the print head position using the following algorithm:
+
+1. Download the [Set.XY.Offset.zip](https://github.com/ghzserg/FF/releases/download/R/Set.XY.Offset.zip) archive and unzip it to the root of a flash drive.
+2. Insert the flash drive into the turned-off printer and turn it on.
+3. The calibration interface will appear on the printer screen. Press Reset.
+4. Use the control arrows to position the print head against the receiver so that the print head presses the shutter lever firmly, the nozzle is behind the movable shutter, and the shutter itself is flush with the front surface of the receiver.
+5. Press the Set button to confirm the calibration result.
+6. Remove the flash drive and reboot the printer.
+
+---
+
+## Updating the Mod
+
+If the mod displays `Update Z-Mod via USB`, you must update via USB, even if you updated recently.
+
+**Updating via USB preserves all data.**
+
+**Simplest method:** Use the [ZFLASH](/Zmod/#zflash) macro. Insert the USB drive, reboot the printer, and run `ZFLASH`. The macro will:
+
+- Check for the latest version.
+- Download the latest release for your printer model.
+- Verify checksums.
+- Reboot the printer.
+- Automatically install the update (keep the USB drive inserted for future updates).
+
+After installation:
+
+1. Go to Fluidd/Mainsail → `Settings` → `Software Update`.
+2. Click `Check Updates` and install the latest Z-Mod updates.
+
+<img width="1239" height="535" alt="image" src="../../images/b42c4ce9-1c0a-45c0-a20c-36919a27d648.png" />
+
+If it shows a lot of errors, that's normal.
+
+Plugins aren't included in the firmware and are downloaded separately.
+
+Click `Check for updates`. Then restore and update all modules one by one. The printer will reboot during this process.
+
+<img width="671" height="223" alt="image" src="../../images/5744dc8e-ba58-4359-b78a-652be846ca07.png" />
+
+**Version Compatibility:**
+
+- The OS version (under `System` → `Distribution`) must match the first two digits of the Z-Mod version (`Settings` → `Updates` → `Z-Mod`).
+- **Mismatched versions cause instability.**
+
+**Manual USB Update:**
+
+1. Format a USB drive to FAT/FAT16/FAT32(MBR).
+2. Copy the [mod file](https://github.com/ghzserg/zmod/releases/) to the USB root.
+3. Power off the printer.
+4. Insert the USB drive.
+5. Power on the printer.
+6. Wait for the printer to reboot (do not remove the USB drive).
+7. Wait for the mod installation to complete and for the printer to report success.
+8. Remove the USB drive.
+9. Power cycle the printer.
+10. Go to Fluidd/Mainsail → `Settings` → `Software Update`, click `Check Updates` and install the latest Z-Mod updates.
+
+---
+
+## Removing or Temporarily Disabling the Mod
+
+- **[SKIP_ZMOD](/Zmod/#skip_zmod)**: Reboots without starting Moonraker/Fluidd.
+- **[REMOVE_ZMOD](/Zmod/#remove_zmod)**: Fully uninstalls the mod.
+
+**Recommended method:** Use the `REMOVE_ZMOD` macro. Use USB removal only if macros are unavailable (_after USB removal the Z-Mod boot logo may remain_).
+
+Attention!
+
+- If you are using Klipper 13, you must run ```UPDATE_MCU```. This will prevent the MCU and Klipper from being different versions.
+- If you have enabled plugins, you must first disable them using ```DISABLE_PLUGIN name=g28_tenz```
+
+To remove the mod completely: ```REMOVE_ZMOD FULL=1```
+
+**USB Removal:**
+
+1. Format a USB drive to FAT/FAT16/FAT32(MBR).
+2. Copy [flashforge_init.sh](https://github.com/ghzserg/zmod/blob/main/Native_firmware/rem_zmod/flashforge_init.sh) to the USB root.
+3. Power off the printer.
+4. Insert the USB drive.
+5. Power on the printer.
+6. Wait for three reboots.
+7. Remove the USB drive and use the stock firmware.
+
+---
+
+## Updating Stock Firmware
+
+1. Disable all active plugins except `recommend`, `timelapse`, and `notify`:
+   ```DISABLE_PLUGIN name=plugin_name```
+
+2. If you are using **Klipper 13**, run ```UPDATE_MCU``` *before* updating the stock firmware. This prevents version mismatch issues between the MCU and Klipper.
+3. Enable Chinese cloud services (if you wish to update via the stock touchscreen):
+   ```SAVE_ZMOD_DATA CHINA_CLOUD=1```
+
+If the native screen does not find updates:
+
+- Your serial number has not yet been included in the update rollout
+- [Install the stock firmware update from a USB drive](/Native_FW/)
+
+**For [AD5X](/AD5X/)/Creator 5/Creator 5 Pro, [Z-Mod activation](/Native_FW/) from a USB drive after updating the stock firmware**:
+
+- [AD5X-enable-zmod.tgz](https://github.com/ghzserg/FF/releases/download/R/AD5X-enable-zmod.tgz)
+- [Creator5-enable-zmod.tgz](https://github.com/ghzserg/FF/releases/download/R/Creator5-enable-zmod.tgz)
+- [Creator5Pro-enable-zmod.tgz](https://github.com/ghzserg/FF/releases/download/R/Creator5Pro-enable-zmod.tgz)
+
+But if you update from the native screen rather than from a USB drive, run the ```RESET_PASSWD``` macro before turning the printer off.
+
+---
+
+## Boot Recovery
+
+*Guide by [@darksimpson](https://t.me/darksimpson), [Alexander](https://github.com/DrA1ex), [@Ikaros413](https://t.me/Ikaros413), [@SoloMen88](https://t.me/SoloMen88)*
+
+**Symptoms:** Printer freezes on boot screen and is unreachable via LAN.
+
+![resized-image](../../images/f63b16e6-2425-41c8-a166-226fb041f5ad.jpg)
+
+![](../../images/ff.jpg)
+
+Try restoring the firmware by installing a full firmware:
+
+- [FF5M](/Native_FW/#installing-full-firmware-on-ff5m)
+- [AD5X](/Native_FW/#installing-full-firmware-on-ad5x)
+
+**Steps:**
+
+1. **Unplug the printer.**
+2. Prepare a **3.3V UART/USB converter** (ensure jumper is set to 3.3V).
+
+![](../../images/ch340.jpg)
+
+3. Open the printer’s rear panel.
+4. Connect to the UART pins (RX, TX, GND — **do NOT connect 3.3V**).
+
+![](../../images/connect.jpg)
+
+**WARNING:** The converter must be 3.3 V. If you apply 5 V, the CPU will burn out and you will have to replace the motherboard! If your converter has a jumper, MAKE SURE to move it from 5V to 3.3V.
+
+5. Connect the converter crosswise:
+
+    - Converter RX → Printer TX
+    - Converter TX → Printer RX
+    - Converter GND → Printer GND
+
+![](../../images/connect_photo.jpg)
+
+6. Identify the new COM port in your OS.
+
+![](../../images/port.jpg)
+
+7. Open [PuTTY](https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html):
+
+    - **Connection type**: Serial
+    - **Speed**: 115200
+    - **COM port**: (e.g., COM6)
+
+8. Power on the printer.
+9. When `Hit any key to stop autoboot` appears, press **Enter**.
+
+10. In U-Boot, run:
+    ```
+    setenv init /bin/sh
+    boot
+    ```
+
+11. After Linux boots, remount the filesystem as writable:
+    ```
+    mount -t proc proc /proc
+    mount -o remount,rw /
+    ```
+
+12. Fix what is broken, e.g. delete a faulty script, or the camera script if boot fails because of the camera:
+    ```
+    rm -f /etc/init.d/S01bad_script
+    rm -f /usr/data/zmod/zmod/.shell/S98camera
+    ```
+
+13. Save changes and reboot:
+    ```
+    sync
+    reboot
+    ```
+---
+
+## Support Mod Development
+
+[SBP, bank card, T-pay](https://pay.cloudtips.ru/p/3cbf9e9f)
+
+<img width="262" height="262" alt="qrCode" src="../../images/e7c1ebf3-3a54-4b46-b071-06656ac06ae1.png" />
+
+BTC `17wXTd9BqYp1K3zCLTxVyGLEXUDjf7XNLL`
+
+<a href="https://boosty.to/ghzserg">Support via Boosty (international Visa/Mastercard)</a>
+
+<img width="150" height="150" alt="ghzserg-donate" src="../../images/86e7fe3a-327b-4a0e-b8c4-ee74078167c0.png" />

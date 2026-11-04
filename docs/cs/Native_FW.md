@@ -1,0 +1,322 @@
+# Nativní firmware
+## Nativní firmware
+
+[Zde je nativní firmware pro tiskárny AD5M, AD5M Pro, AD5X](https://github.com/ghzserg/FF/releases/R)
+
+### Jak nainstalovat nativní firmware
+
+0. Před instalací je vhodné tiskárnu, pokud je to možné, obnovit do výchozího nastavení.
+1. Naformátujte USB disk (běžný flash disk) na FAT32 nebo FAT/FAT16 (MBR).
+2. Zkopírujte soubor do kořenového adresáře USB disku (bez podsložek).
+3. Vypněte tiskárnu.
+4. Vložte USB disk do tiskárny.
+5. Zapněte tiskárnu.
+6. Počkejte, až se úplně spustí.
+7. Vypněte a zapněte tiskárnu.
+8. Proveďte potřebné [kalibrace](/cs/SetupCalibrations/).
+
+### Nativní firmware pro AD5X
+
+Toto je tovární (Factory) firmware pro AD5X.
+
+Pokud nechcete, aby tiskárna [před každým tiskem měřila střed podložky](/cs/FAQ/#před-každým-tiskem-tiskárna-měří-střed-podložky), instalujte verzi firmwaru nejvýše 1.1.7.
+
+- [1.0.2](https://github.com/ghzserg/FF/releases/download/R/AD5X-1.0.2-1.0.2-20250120-Factory.tgz)
+- [1.0.7](https://github.com/ghzserg/FF/releases/download/R/AD5X-1.0.7-1.0.3-20250408-Factory.tgz)
+- [1.0.8](https://github.com/ghzserg/FF/releases/download/R/AD5X-1.0.8-1.0.5-20250418-Factory.tgz)
+- [1.1.6](https://github.com/ghzserg/FF/releases/download/R/AD5X-1.1.6-1.1.0-3.0.6-20250722.tgz)
+- [1.1.7](https://github.com/ghzserg/FF/releases/download/R/AD5X-1.1.7-1.1.0-3.0.6-20250912-Factory.tgz)
+- [1.1.9](https://github.com/ghzserg/FF/releases/download/R/AD5X-1.1.9-1.1.1-3.0.7-20251201-Factory.tgz)
+- [1.2.0](https://github.com/ghzserg/FF/releases/download/R/AD5X-1.2.0-1.1.1-3.0.7-20251212-Factory.tgz)
+- [1.2.1](https://github.com/ghzserg/FF/releases/download/R/AD5X-1.2.1-1.1.1-3.0.7-20251217-Factory.tgz)
+- [1.2.2](https://github.com/ghzserg/FF/releases/download/R/AD5X-1.2.2-1.1.1-3.0.7-20260205.tgz)
+- [1.2.3](https://github.com/ghzserg/FF/releases/download/R/AD5X-1.2.3-1.1.1-3.0.7-20260205-Factory.tgz)
+- [3.0.3](https://github.com/ghzserg/FF/releases/download/R/AD5X-3.0.3-1.1.1-3.0.7-20260119.tgz)
+- [3.0.9](https://github.com/ghzserg/FF/releases/download/R/AD5X-3.0.9-1.1.1-3.0.7-20260417.tgz)
+- [3.1.0](https://github.com/ghzserg/FF/releases/download/R/AD5X-3.1.0-1.1.1-3.0.7-20260515.tgz)
+
+### Nativní firmware pro AD5M
+
+Toto je tovární (Factory) firmware pro AD5M.
+
+Pokud nechcete, aby tiskárna [před každým tiskem měřila střed podložky](/cs/FAQ/#před-každým-tiskem-tiskárna-měří-střed-podložky), instalujte verzi firmwaru nejvýše 3.2.3.
+
+- [3.1.3](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-3.1.3-2.2.3-20250107-Factory.tgz)
+- [3.1.9](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-3.1.9-2.2.3-20250807-Factory.tgz)
+- [3.2.3](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-3.2.3-2.2.3-20251016-Factory.tgz)
+- [3.2.5](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-3.2.5-2.2.3-20251205-Factory.tgz)
+- [3.2.6](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-3.2.6-2.2.3-20251212-Factory.tgz)
+- [3.2.7](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-3.2.7-2.2.3-20251217-Factory.tgz)
+- [5.0.3](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-5.0.3-2.2.3-20260122.tgz)
+- [5.1.1](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-5.1.1-2.2.3-20260417.tgz)
+
+### Nativní firmware pro AD5M Pro
+
+Toto je tovární (Factory) firmware pro AD5M Pro.
+
+Pokud nechcete, aby tiskárna [před každým tiskem měřila střed podložky](/cs/FAQ/#před-každým-tiskem-tiskárna-měří-střed-podložky), instalujte verzi firmwaru nejvýše 3.2.3.
+
+- [3.1.3](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-3.1.3-2.2.3-20250107-Factory.tgz)
+- [3.2.3](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-3.2.3-2.2.3-20251017-Factory.tgz)
+- [3.2.4](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-3.2.4-2.2.3-20251114-Factory.tgz)
+- [3.2.5](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-3.2.5-2.2.3-20251126-Factory.tgz)
+- [3.2.7](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-3.2.7-2.2.3-20251217-Factory.tgz)
+- [5.0.3](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-5.0.3-2.2.3-20260122.tgz)
+- [5.1.2](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-5.1.2-2.2.3-20260418.tgz)
+
+### Originální firmware Creator 5
+
+Toto je tovární (Factory) originální firmware pro Creator 5.
+
+- [1.9.7](https://github.com/ghzserg/FF/releases/download/R/Creator5-1.9.7-1.2.9-20260810.tgz)
+- [1.9.9](https://github.com/ghzserg/FF/releases/download/R/Creator5-1.9.9-1.3.0-20260907.tgz)
+- [2.0.0](https://github.com/ghzserg/FF/releases/download/R/Creator5-2.0.0-1.3.1-20261014.tgz)
+
+### Originální firmware Creator 5 Pro
+
+Toto je tovární (Factory) originální firmware pro Creator 5 Pro.
+
+- [1.9.7](https://github.com/ghzserg/FF/releases/download/R/Creator5Pro-1.9.7-1.2.9-20260810.tgz)
+- [1.9.8](https://github.com/ghzserg/FF/releases/download/R/Creator5Pro-1.9.8-1.2.9-20260819.tgz)
+- [1.9.9](https://github.com/ghzserg/FF/releases/download/R/Creator5Pro-1.9.9-1.3.0-20260907.tgz)
+- [2.0.0](https://github.com/ghzserg/FF/releases/download/R/Creator5Pro-2.0.0-1.3.1-20261014.tgz)
+
+## Unbricker
+
+Univerzální unbricker pro AD5M / AD5M Pro / AD5X / Creator 5 / Creator 5 Pro
+
+1. Stáhněte soubor [Universal.zip](https://github.com/ghzserg/FF/releases/download/R/Universal.zip)
+2. Naformátujte flash disk na FAT32
+3. Rozbalte [Universal.zip](https://github.com/ghzserg/FF/releases/download/R/Universal.zip) do kořenového adresáře flash disku
+4. Vypněte tiskárnu
+5. Vložte flash disk do tiskárny
+6. Počkejte na flashování firmwaru (až 40 minut)
+7. Vyjměte flash disk z tiskárny
+8. Vypněte a zapněte tiskárnu
+
+Pokud se něco pokazilo, zkontrolujte logy na flash disku.
+
+### Instalace kompletního firmwaru na Creator 5 / Creator 5 Pro
+
+**Toto NENÍ originální Factory firmware, ale nástroj pro oživení tiskárny.** Instalujte ho pouze v případě, že tiskárna vůbec nenastartuje.
+
+Instalace trvá dlouho, až hodinu.
+
+1. Zkopírujte všechny 3 soubory najednou na USB flash disk naformátovaný na FAT32:
+
+   - [Creator5-factory-1.9.7.tgz](https://github.com/ghzserg/FF/releases/download/R/Creator5-factory-1.9.7.tgz)
+   - [Creator5Pro-factory-1.9.7.tgz](https://github.com/ghzserg/FF/releases/download/R/Creator5Pro-factory-1.9.7.tgz)
+   - [Creator5Pro-factory.tar.xz](https://github.com/ghzserg/FF/releases/download/R/Creator5Pro-factory.tar.xz)
+
+2. Vypněte tiskárnu, vložte flash disk, zapněte ji a počkejte na úplný restart. Z Creator 5 se stane Creator 5 Pro — to je normální.
+
+3. Pokud po aktualizaci potřebujete znovu nahrát firmware do MCU, nainstalujte:
+
+   - [Creator5](https://github.com/ghzserg/FF/releases/download/R/Creator5-1.9.9-1.3.0-20260907.tgz)
+   - [Creator5Pro](https://github.com/ghzserg/FF/releases/download/R/Creator5Pro-1.9.9-1.3.0-20260907.tgz)
+
+4. Pro převod Creator 5 z verze Pro zpět na běžnou verzi:
+
+   - [Creator5Pro-to_c5.tgz](https://github.com/ghzserg/FF/releases/download/R/Creator5Pro-to_c5.tgz)
+
+### Instalace úplného firmwaru na AD5X
+
+Toto není nativní firmware, ale firmware pro obnovu z nefunkčního stavu (unbricking/recovery). Instalujte ho pouze v případě, že se tiskárna vůbec nespustí.
+
+Instalace trvá dlouho, až jednu hodinu.
+
+Zkopírujte oba soubory najednou na USB disk:
+
+- [AD5X-factory-1.0.9.tgz](https://github.com/ghzserg/FF/releases/download/R/AD5X-factory-1.0.9.tgz)
+- [AD5X-factory.tar.xz](https://github.com/ghzserg/FF/releases/download/R/AD5X-factory.tar.xz)
+- Pokud po aktualizaci potřebujete znovu flashovat MCU, nainstalujte [AD5X](https://github.com/ghzserg/FF/releases/download/R/AD5X-1.1.7-1.1.0-3.0.6-20250912-Factory.tgz)
+
+### Instalace úplného firmwaru na AD5M / AD5M Pro
+
+Toto není nativní firmware, ale firmware pro obnovu z nefunkčního stavu (unbricking/recovery). Instalujte ho pouze v případě, že se tiskárna vůbec nespustí.
+
+Instalace trvá dlouho, až jednu hodinu.
+
+1. Zkopírujte následující soubory na USB disk pro AD5M:
+
+  - [Adventurer5M-factory-3.1.3.tgz](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-factory-3.1.3.tgz)
+  - [Adventurer5M-factory.tar.xz](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-factory.tar.xz)
+  - `config.tar`, pokud jste jej dříve vytvořili pomocí `TAR_CONFIG`
+
+2. Zkopírujte na USB flash disk pro AD5M Pro následující soubory (tiskárna přejde na verzi firmwaru FF5M; jak provést zpětný přechod, naleznete níže):
+
+   - [Adventurer5MPro-factory-3.1.3.tgz](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-factory-3.1.3.tgz)
+   - [Adventurer5M-factory.tar.xz](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-factory.tar.xz)
+   - `config.tar`, pokud jste jej dříve vytvořili pomocí `TAR_CONFIG`
+
+3. Pokud po aktualizaci potřebujete znovu flashovat MCU, nainstalujte [Adventurer5M-3.1.9-2.2.3-20250807-Factory.tgz](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-3.1.9-2.2.3-20250807-Factory.tgz)
+
+## Aktivátor
+
+Univerzální aktivátor pro AD5X / Creator 5 / Creator 5 Pro
+
+1. Stáhněte soubor [Universal_enable-zmod.zip](https://github.com/ghzserg/FF/releases/download/R/Universal_enable-zmod.zip)
+2. Naformátujte flash disk na FAT32
+3. Rozbalte [Universal_enable-zmod.zip](https://github.com/ghzserg/FF/releases/download/R/Universal_enable-zmod.zip) do kořenového adresáře flash disku
+4. Vypněte tiskárnu
+5. Vložte flash disk do tiskárny
+6. Počkejte na aktualizaci firmwaru
+7. Vyjměte flash disk z tiskárny
+8. Vypněte a zapněte tiskárnu
+
+Pokud se něco pokazilo, zkontrolujte soubor `enable-zmod.log` na flash disku.
+
+### Aktivace Z-Mod na AD5X/Creator 5/Creator 5 Pro
+
+Po aktualizaci nativního firmwaru na AD5X/Creator 5/Creator 5 Pro lze mod znovu aktivovat bez kompletní přeinstalace.
+
+- [AD5X-enable-zmod.tgz](https://github.com/ghzserg/FF/releases/download/R/AD5X-enable-zmod.tgz)
+- [Creator5-enable-zmod.tgz](https://github.com/ghzserg/FF/releases/download/R/Creator5-enable-zmod.tgz)
+- [Creator5Pro-enable-zmod.tgz](https://github.com/ghzserg/FF/releases/download/R/Creator5Pro-enable-zmod.tgz)
+- [Creator 5](https://github.com/ghzserg/FF/releases/download/R/Creator5-log.tgz)
+- [Creator 5 Pro](https://github.com/ghzserg/FF/releases/download/R/Creator5Pro-log.tgz)
+
+### SET XY
+
+Pro ty, kterým ~~ujela střecha~~ se posunula „domovská“ pozice (parkování u odpadního žlabu). Extrahujte obsah archivu do kořenového adresáře USB disku naformátovaného na FAT32, vypněte tiskárnu, vložte disk a tiskárnu zapněte. Načte se kalibrační obrazovka. Nejprve stiskněte Reset. Poté pomocí ovládacích tlačítek na obrazovce nastavte správnou pozici hlavy. Stisknutím tlačítka Set pozici uložíte. Restartujte tiskárnu bez USB disku. Archiv pochází z oficiální podpory FlashForge.
+
+[Set.XY.Offset.zip](https://github.com/ghzserg/FF/releases/download/R/Set.XY.Offset.zip)
+
+## Root
+
+- Uživatel: root
+- Heslo: root
+
+- [Adventurer5M-root](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-root.tgz)
+- [Adventurer5MPro-root](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-root.tgz)
+- [AD5X-root](https://github.com/ghzserg/FF/releases/download/R/AD5X-root.tgz)
+- [Creator 5](https://github.com/ghzserg/FF/releases/download/R/Creator5-root.tgz)
+- [Creator 5 Pro](https://github.com/ghzserg/FF/releases/download/R/Creator5Pro-root.tgz)
+
+## Různé
+### Nativní firmware pro opravu E0011
+
+[fix_e0011](/cs/Global/#fix_e0011)
+
+Zapnutí opravy E0011
+
+- [Adventurer5M-e0011-on.tgz](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-e0011-on.tgz)
+- [Adventurer5MPro-e0011-on.tgz](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-e0011-on.tgz)
+
+Vypnutí opravy E0011
+
+- [Adventurer5M-e0011-off.tgz](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-e0011-off.tgz)
+- [Adventurer5MPro-e0011-off.tgz](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-e0011-off.tgz)
+
+### Nativní firmware pro opravu E0017
+
+[fix_e0017](/cs/Global/#fix_e0017)
+
+- [Adventurer5M-e0017-4.tgz](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-e0017-4.tgz)
+- [Adventurer5MPro-e0017-4.tgz](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-e0017-4.tgz)
+
+### 5M na 5MPro
+
+[Adventurer5M-3.1.3-2.2.3-20250107-Factory-5M2PRO.tgz](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-3.1.3-2.2.3-20250107-Factory-5M2PRO.tgz)
+
+### 5MPro na 5M
+
+[Adventurer5MPro-3.1.3-2.2.3-20250107-Factory-PRO25M.tgz](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-3.1.3-2.2.3-20250107-Factory-PRO25M.tgz)
+
+### Převod Creator 5 na Creator 5 Pro
+
+[Creator5-to_c5pro.tgz](https://github.com/ghzserg/FF/releases/download/R/Creator5-to_c5pro.tgz)
+
+### Převod Creator 5 Pro na Creator 5
+
+[Creator5Pro-to_c5.tgz](https://github.com/ghzserg/FF/releases/download/R/Creator5Pro-to_c5.tgz)
+
+### 5X IFS
+Archiv firmwaru IFS
+
+- [3.0.6](https://github.com/ghzserg/FF/releases/download/R/ifc_3.0.6.zip)
+
+- [Obnovení firmwaru IFS](AD5X.md#11-obnova-firmwaru-ifs)
+
+### G-code
+
+- [3DBenchy_PLA.3mf](https://github.com/ghzserg/FF/releases/download/R/3DBenchy_PLA.3mf)
+- [FlashForge-TestModel-01.3mf](https://github.com/ghzserg/FF/releases/download/R/FlashForge-TestModel-01.3mf)
+- [OrcaPlug_PLA.3mf](https://github.com/ghzserg/FF/releases/download/R/OrcaPlug_PLA.3mf)
+- [Earphone.support_PLA.3mf](https://github.com/ghzserg/FF/releases/download/R/Earphone.support_PLA.3mf)
+- [FISH_PLA.3mf](https://github.com/ghzserg/FF/releases/download/R/FISH_PLA.3mf)
+
+### MD5
+
+> Poznámka: Platí pouze při odesílání G-code. Pro 3MF není potřeba.
+
+- [zmod_preprocess-windows-amd64.exe](https://github.com/ghzserg/zmod_preprocess/releases/latest/download/zmod_preprocess-windows-amd64.exe) - Windows
+- [zmod_preprocess-linux-amd64](https://github.com/ghzserg/zmod_preprocess/releases/latest/download/zmod_preprocess-linux-amd64) - Linux. Nezapomeňte na `chmod +x zmod_preprocess-linux-amd64`
+- [zmod_preprocess-darwin-arm64](https://github.com/ghzserg/zmod_preprocess/releases/latest/download/zmod_preprocess-darwin-arm64) - macOS Apple Silicon. Nezapomeňte spustit ```chmod +x zmod_preprocess-darwin-arm64```
+- [zmod_preprocess-darwin-amd64](https://github.com/ghzserg/zmod_preprocess/releases/latest/download/zmod_preprocess-darwin-amd64) - macOS Intel. Nezapomeňte spustit ```chmod +x zmod_preprocess-darwin-amd64```
+- [zmod-preprocess.py](https://github.com/ghzserg/zmod_preprocess/releases/latest/download/zmod-preprocess.py) - Univerzální Python. Nezapomeňte spustit ```chmod +x zmod-preprocess.py```
+- [zmod-preprocess.sh](https://github.com/ghzserg/zmod_preprocess/releases/latest/download/zmod-preprocess.sh) - Linux/macOS Bash. Nezapomeňte spustit ```chmod +x zmod-preprocess.sh```
+
+### CONFIG
+#### Nativní konfigurační soubory
+
+- [AD5X](https://github.com/ghzserg/zmod/tree/main/Native_firmware/config/ad5x)
+- [AD5M/Pro](https://github.com/ghzserg/zmod/tree/main/Native_firmware/config/ff5m)
+- [Creator 5 Pro](https://github.com/ghzserg/zmod/tree/main/Native_firmware/config/creator5pro)
+
+### FIX_LOOP
+#### Obnovení zavádění
+
+Odstraní zbylé odkazy z automatického spouštění.
+
+- [AD5M](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-fix_loop.tgz)
+- [AD5M Pro](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-fix_loop.tgz)
+- [AD5X](https://github.com/ghzserg/FF/releases/download/R/AD5X-fix_loop.tgz)
+
+### FIX_UPDATE_MCU
+#### Oprava neustálých aktualizací MCU
+
+- [AD5M](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-fix_update_mcu.tgz)
+- [AD5M Pro](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-fix_update_mcu.tgz)
+- [AD5X](https://github.com/ghzserg/FF/releases/download/R/AD5X-fix_update_mcu.tgz)
+- [Creator 5](https://github.com/ghzserg/FF/releases/download/R/Creator5-update_mcu.tgz)
+- [Creator 5 Pro](https://github.com/ghzserg/FF/releases/download/R/Creator5Pro-update_mcu.tgz)
+
+### LOG
+
+Univerzální sběr logů pro AD5M / AD5M Pro / AD5X / Creator 5 / Creator 5 Pro
+
+1. Stáhněte soubor [Universal-log.zip](https://github.com/ghzserg/FF/releases/download/R/Universal-log.zip)
+2. Naformátujte flash disk na FAT32
+3. Rozbalte [Universal-log.zip](https://github.com/ghzserg/FF/releases/download/R/Universal-log.zip) do kořenového adresáře flash disku
+4. Vypněte tiskárnu
+5. Vložte flash disk do tiskárny
+6. Počkejte na dokončení aktualizace firmwaru
+7. Vyjměte flash disk z tiskárny
+8. Vypněte a zapněte tiskárnu
+
+Pokud se něco pokazilo, podívejte se na soubor `zmd_log.log` na flash disku.
+
+Soubor `config-x.y.z.tar` je nutné přiložit k tiketu.
+
+#### Získání logů, když Klipper nefunguje
+
+- [AD5M](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-log.tgz)
+- [AD5M Pro](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-log.tgz)
+- [AD5X](https://github.com/ghzserg/FF/releases/download/R/AD5X-log.tgz)
+- [Creator 5](https://github.com/ghzserg/FF/releases/download/R/Creator5-log.tgz)
+- [Creator 5 Pro](https://github.com/ghzserg/FF/releases/download/R/Creator5Pro-log.tgz)
+
+### REM_ZMOD
+#### Odstranit Z-Mod
+
+- [AD5M](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-rem_zmod.tgz)
+- [AD5M Pro](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-rem_zmod.tgz)
+- [AD5X](https://github.com/ghzserg/FF/releases/download/R/AD5X-rem_zmod.tgz)
+
+### FIX_KLIPPER
+#### Obnovit nativní Klipper
+
+- [AD5M](https://github.com/ghzserg/FF/releases/download/R/Adventurer5M-fix_klipper.tgz)
+- [AD5M Pro](https://github.com/ghzserg/FF/releases/download/R/Adventurer5MPro-fix_klipper.tgz)
+- [AD5X](https://github.com/ghzserg/FF/releases/download/R/AD5X-fix_klipper.tgz)

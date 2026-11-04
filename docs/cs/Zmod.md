@@ -1,0 +1,340 @@
+<h1 align="center">Zmod</h1>
+
+Makro je malý program napsaný v jazyce Klipper/Gcode.
+
+Lze jej spustit z:
+
+- GCODE souboru
+- Konzole Fluidd/Mainsail (stiskněte anglické písmeno `C` ve Fluidd)
+
+!!! note "Poznámka"
+    *Hodnota v závorkách je výchozí hodnota*
+
+---
+
+### CAMERA_ON
+
+Zapne alternativní implementaci kamery.
+Parametry:
+
+- `WIDTH` — šířka obrázku (výchozí: `640`)
+- `HEIGHT` — výška obrázku (výchozí: `480`)
+- `FPS` — snímky za sekundu (výchozí: `20`)
+- `VIDEO` — video zařízení (výchozí: `video0`)
+- `FS` — `1` = zapnout omezení velikosti snímku pro problematické kamery, `0` = vypnout (výchozí: `0`)
+- `STREAMER` — jaký streamer použít (auto, mjpg_streamer, ustreamer)
+- `FORMAT` — formát obrazu pro ustreamer: YUYV, YVYU, UYVY, RGB565, RGB24, BGR24, MJPEG, JPEG; výchozí: MJPEG
+
+*Před zavoláním tohoto makra vypněte kameru na obrazovce tiskárny.*
+
+Chcete-li kameru zapnout, použijte ```CAMERA_ON VIDEO=video0``` nebo ```CAMERA_ON VIDEO=video3``` nebo ```CAMERA_ON VIDEO=video99```.
+
+<img width="734" height="221" alt="{D2A001DD-7C89-4AB9-9CB9-741B7007B0B4}" src="../../images/e8ddbbd3-ebbf-4b4e-86cc-2a62365a4a88.png" />
+
+Pokud kamera nefunguje, podívejte se na logy v `mod_data/log/cam/`.
+
+Spotřeba RAM u standardní kamery:
+
+- 640x480: 2,9 MiB
+- 1280x720: 7,8 MiB
+- 1920x1080: 18,1 MiB
+
+*Mnoho kamer z AliExpressu/Ozonu/Wildberries vždy spotřebuje 18 MiB.*
+
+!!! note "Poznámka"
+    - [Co je alternativní kamera?](/cs/FAQ/#co-je-to-alternativní-kamera)
+    - [Nainstaloval jsem tiskárnu a Z-Mod skryl mou kameru! Viděl jsem ji v Orca-FF a nyní je pryč!](/cs/FAQ/#nainstaloval-jsem-tiskárnu-ale-z-mod-mi-skryl-kameru-v-orca-ff-jsem-ji-viděl-ale-teď-je-pryč)
+
+`Camera Off Waiting...` - tato zpráva se zobrazí, pokud stream kamery ještě není k dispozici. Kamera se spouští až po Klipperu, během zobrazení informací o globálních parametrech. To je normální.
+
+#### Nastavení kamery
+
+**Základní parametry**
+
+| Parametr | Popis | Výchozí hodnota |
+|---|---|---|
+| `WIDTH` | Šířka obrázku | 640 |
+| `HEIGHT` | Výška obrázku | 480 |
+| `FPS` | Snímky za sekundu | 20 |
+| `VIDEO` | Zařízení kamery | video0 |
+| `FS` | Oprava problematických kamer (1 – ano, 0 – ne) | 0 |
+| `STREAMER` | Program pro zpracování streamu kamery | auto |
+| `FORMAT` | Formát obrázku (pouze pro ustreamer) | MJPEG |
+
+**Co je to streamer?**
+
+Streamer je program, který snímá obraz z kamery a zpřístupní ho v prohlížeči.
+
+**Jsou k dispozici dvě možnosti:**
+
+- **mjpg_streamer** – jednoduchý program, funguje pouze s MJPG kamerami
+- **ustreamer** – výkonnější, ale spotřebuje více paměti; podporuje různé kamery
+
+Parametr `STREAMER=auto` automaticky zvolí vhodný streamer.
+
+**Formáty obrázků (pouze pro ustreamer)**
+
+Můžete si vybrat: YUYV, YVYU, UYVY, RGB565, RGB24, BGR24, MJPEG, JPEG.
+
+Výchozí je MJPEG.
+
+**Příklady příkazů**
+
+Jednoduchý start kamery video0 přes mjpg_streamer:
+```
+CAMERA_ON VIDEO=video0
+```
+
+Start kamery video0 přes ustreamer s vlastním nastavením:
+```
+CAMERA_ON VIDEO=video0 STREAMER=ustreamer FORMAT=YUYV WIDTH=640 HEIGHT=480
+```
+
+**Kde zobrazit obraz?**
+
+Otevřete v prohlížeči: `http://IP_tiskárny:8080`
+
+Tam můžete upravit jas, kontrast a další nastavení.
+
+**Řešení problémů**
+
+Kamera není detekována?
+Spusťte:
+```
+CAMERA_ON VIDEO=video99
+```
+Program zobrazí seznam dostupných kamer.
+
+**Logy (záznamy chyb)** se nacházejí v adresáři: `log/cam/`
+
+---
+### CAMERA_OFF
+
+Vypne alternativní implementaci kamery.
+
+---
+### CAMERA_RESTART
+
+Restartuje alternativní implementaci kamery.
+
+---
+### REMOVE_ZMOD
+
+Odinstaluje Z-Mod.
+
+- `FULL`: `0` = zachovat `/opt/config/mod_data`, `1` = smazat `/opt/config/mod_data` (výchozí: `0`)
+
+Adresář `/opt/config/mod_data` ukládá konfigurace pro `zmod`, `fluidd`, `moonraker` a `mainsail`.
+Ve výchozím nastavení se nemaže, protože se makro `REMOVE_ZMOD` často volá omylem.
+
+Varování! Sami deaktivujte všechny pluginy a přejděte na nativní Klipper.
+
+---
+### SKIP_ZMOD
+
+Restartuje do původního systému bez spuštění Z-Mod.
+Deaktivuje konfigurace Z-Mod, Moonraker a Fluidd.
+
+Varování! Sami deaktivujte všechny pluginy a přejděte na nativní Klipper.
+
+Zůstane aktivní:
+
+- Alternativní kamera
+- SSH
+
+---
+### TAR_CONFIG
+
+Zálohuje konfigurační soubory do archivu.
+Archiv stáhnete přes: **Konfigurace → mod_data → config.tar.gz**
+
+---
+### RESTORE_TAR_CONFIG
+
+Obnoví konfigurace z archivu `config.tar.gz`.
+Archiv nahrajte do: **Konfigurace → mod_data → config.tar.gz**
+
+---
+### ZFLASH
+
+Aktualizuje firmware přes síť pomocí USB disku.
+
+1. Vložte USB disk do tiskárny a zapněte ji.
+2. Pokud pracujete bez nativní obrazovky, ujistěte se, že je USB disk vložen **před** zapnutím.
+3. Makro vyhledá nejnovější verzi, stáhne ji na USB disk, ověří MD5 součet a po restartu ji nainstaluje.
+
+---
+
+### STOP_ZMOD
+
+Uvolní z paměti Guppy, Helix, Moonraker a Fluidd/Mainsail. Telegram bot také přestane fungovat.
+
+Parametry:
+
+- SCREEN (0 - neuvolňovat, 1 - uvolnit)
+- MOONRAKER (0 - neuvolňovat, 1 - uvolnit)
+- HTTP (0 - neuvolňovat, 1 - uvolnit)
+
+Příklad:
+```
+STOP_ZMOD SCREEN=1 MOONRAKER=0 HTTP=0
+```
+
+Pokud je tento řádek přidán do startovacího kódu, bude GUPPY/HELIX po zahájení tisku uvolněn z paměti.
+
+---
+
+### START_ZMOD
+
+Po STOP_ZMOD znovu spustí Guppy, Helix, Moonraker a Fluidd/Mainsail.
+
+Parametry:
+
+- SCREEN (0 - nenačíst, 1 - načíst)
+- MOONRAKER (0 - nenačíst, 1 - načíst)
+- HTTP (0 - nenačíst, 1 - načíst)
+
+Příklad:
+```
+START_ZMOD SCREEN=1 MOONRAKER=0 HTTP=0
+```
+
+Pokud je tento řádek přidán do koncového kódu, bude GUPPY/HELIX spuštěn po dokončení tisku.
+
+---
+### ZSSH_ON
+
+Zapne SSH tunelování.
+Parametry:
+
+- `SSH_SERVER` — IP/hostname vzdáleného SSH serveru
+- `SSH_PORT` — SSH port (výchozí: `22`)
+- `SSH_USER` — uživatelské jméno vzdáleného serveru
+- `VIDEO_PORT` — port vzdáleného serveru pro video streaming (výchozí: `8080`)
+- `MOON_PORT` — port vzdáleného serveru pro Moonraker (výchozí: `7125`)
+- `REMOTE_RUN` — příkaz k provedení na vzdáleném serveru (výchozí: `"NONE"`).
+  Příklad: Použijte skript [ff5m.sh](https://github.com/ghzserg/z_ff5m/blob/1.7/telegram/ff5m.sh): `./ff5m.sh bot1` (umístěno v `mod/telegram/`) pro restart Telegram bota.
+
+**Skript nastavení (pokud není nainstalován jedním příkazem):**
+```bash
+su - tbot  # Přepněte na uživatele bot service
+wget --cache=off -q -O ff5m.sh https://raw.githubusercontent.com/ghzserg/zmod_ff5m/refs/heads/main/telegram/ff5m.sh
+chmod +x ff5m.sh
+```
+
+**Příklad použití v konzoli Fluidd/Mainsail:**
+```
+ZSSH_ON SSH_SERVER=remote.server.ru SSH_PORT=22 SSH_USER=tbot VIDEO_PORT=8080 MOON_PORT=7125 REMOTE_RUN="./ff5m.sh bot1"
+```
+
+SSH se spustí 3 minuty po startu Klipperu a automaticky se restartuje na začátku tisku (přes makro `START_PRINT`).
+
+[Více o Telegram botovi](/cs/Telegram/)
+
+---
+### ZSSH_OFF
+
+Vypne SSH klienta.
+
+---
+### ZSSH_RESTART
+
+Restartuje SSH klienta.
+
+---
+### ZSSH_RELOAD
+
+Znovu spustí SSH klienta, pokud neběží.
+Toto makro se spouští na začátku tisku (přes `START_PRINT`).
+
+---
+### ZRESTORE
+
+Obnoví tisk po výpadku napájení nebo chybách tiskárny.
+
+**Požadavky:**
+
+- Nativní obrazovka musí být vypnutá (má vlastní obnovu, která není kompatibilní se ZRESTORE).
+- Název tisknutého souboru **nesmí začínat číslem**.
+
+---
+
+### ZLINK
+
+Připojí se ke cloudu [zmod.link](https://zmod.link/link/)
+
+- Cloud vám umožní spravovat tiskárnu přes Fluidd nebo Mainsail odkudkoliv.
+- Spotřeba paměti na tiskárně se zvýší o 1 MB.
+- Data se odesílají z tiskárny do cloudu pomocí šifrování.
+- Přístup do cloudu odkudkoliv také používá šifrování.
+- Uživatel vidí pouze své vlastní tiskárny a nemůže se připojit k ostatním.
+- Přístup k tiskárnám uživatele je chráněn přihlašovacím jménem a heslem.
+
+Jak získat přihlašovací jméno a heslo:
+
+1. Napište botovi [@zmod_help_bot](https://t.me/zmod_help_bot)
+2. Zadejte příkaz ```cloud``` - pokud jste se již registrovali, sdělí vám vaše přihlašovací jméno
+3. Chcete-li zaregistrovat uživatele se jménem `test`, zadejte: ```cloud register test```
+4. Chcete-li obnovit heslo, zadejte: ```cloud reset_password```
+5. Chcete-li odebrat aktuálního uživatele, zadejte: ```cloud remove```
+
+Pokud Telegram není dostupný:
+
+1. Otevřete [vk.com/zmod_official](https://vk.com/zmod_official)
+2. Napište zprávu do skupiny
+3. Zadejte příkaz ```cloud``` – pokud jste se již registrovali, sdělí vám vaše přihlašovací jméno
+4. Chcete-li zaregistrovat uživatele se jménem `test`, zadejte: ```cloud register test```
+5. Chcete-li obnovit heslo, zadejte: ```cloud reset_password```
+6. Chcete-li odebrat aktuálního uživatele, zadejte: ```cloud remove```
+
+Jak se připojit ke cloudu [zmod.link](https://zmod.link/link/):
+
+1. Navštivte web [zmod.link](https://zmod.link/link/) a zadejte své přihlašovací jméno a heslo
+
+   <img width="547" height="615" alt="{264D6782-600F-4700-B9D2-0582F7427FD2}" src="../../images/d8d3f51e-4fc7-4e1e-8fa7-dfc07ddbeab2.png" />
+
+2. Klikněte na tlačítko "Add Printer"
+
+   <img width="569" height="502" alt="image" src="../../images/72346ee6-dde6-4736-80b1-2eb2927bf983.png" />
+
+3. Otevřete tiskárnu v samostatné kartě a v konzoli tiskárny zadejte příkaz ```ZLINK```
+
+   <img width="1563" height="163" alt="{90DC4366-D258-4912-8028-22C589DF4E91}" src="../../images/bee350ee-8d99-465c-9621-48788c6f7a9c.png" />
+
+4. Zkopírujte klíč do schránky – na snímku je zvýrazněn
+5. Zadejte jméno tiskárny a klíč, který jste zkopírovali v předchozím kroku
+
+   Příklad:
+
+   - `testprinter`
+   - `ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBDxX5XzNDXg+sbTArdiOzFpMtHXzgAhfC2N2ogS4TUsQYV4AD6HfSFL3J4ISNZ2DgesZf35rfH1I/qI2ckQVGlE=`
+
+   <img width="557" height="775" alt="{E4FC2206-84BC-4134-92C2-B4253D8F23E5}" src="../../images/b6401b71-5827-480d-ba1c-b7114f87177b.png" />
+
+   Klikněte na tlačítko "Add Printer"
+
+6. Zkopírujte příkaz poskytnutý webem a vložte ho do konzole tiskárny
+
+   <img width="558" height="652" alt="{CDC8146F-B9DF-44A1-9C0B-3E6828CD540E}" src="../../images/ed92a80f-93cc-41b8-bde1-aa0b2b2c0ecc.png" />
+
+   V příkladu: ```zlink p=testprinter u=test m=10006 c=30006```
+
+   Klikněte na tlačítko ```I have already pasted the string into the printer```
+
+   Poté se tiskárna připojí ke cloudu.
+
+   Chcete-li připojení vypnout, zadejte ```ZLINK_OFF```
+
+7. Nyní se můžete připojit k Fluidd nebo Mainsail přes internet
+
+   <img width="526" height="654" alt="{CA6FC599-6060-4E3B-B525-EBB76D8780A1}" src="../../images/0208dbad-8627-4636-b971-cfe0c5d7f8bd.png" />
+
+   Stačí kliknout na požadované tlačítko.
+
+PS: Kamera se může načíst později než rozhraní – to je normální.
+
+PPS: Pokud něco nefunguje správně, obnovte stránku pomocí Ctrl + F5 a přejděte na [zmod.link](https://zmod.link/link/)
+
+   <img width="540" height="449" alt="{30D01CA4-3E9E-40EC-BCD1-9A8597DCCFDE}" src="../../images/0d48b9be-a9df-4bfd-a38a-6d883ab31e73.png" />
+
+   <img width="500" height="393" alt="{D03D643F-907C-4A6D-A48E-D881AAC33268}" src="../../images/69f9d8d5-67ca-476e-b362-e35abb1d4832.png" />

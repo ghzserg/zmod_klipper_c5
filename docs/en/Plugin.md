@@ -1,0 +1,208 @@
+# Plugins in Z-Mod
+
+Any user can create and connect their own plugin to **zmod**.
+
+Plugins included with Z-Mod:
+
+1. [Recommend](https://github.com/ghzserg/recommend) - Settings recommended for immediate use after installing the mod.
+2. [G28_tenz](https://github.com/ghzserg/g28_tenz) – Z-axis parking using load cells
+3. [Nopoop](https://github.com/ghzserg/nopoop) - Maximum waste reduction by ninjamida
+4. [TimeLapse](https://github.com/ghzserg/timelapse) - Moonraker Timelapse
+5. [Notify](https://github.com/ghzserg/notify) - Receive notifications in Telegram and more than 100 other services
+
+External plugins not developed by the Z-Mod author.
+
+1. [Bambufy](https://github.com/function3d/bambufy/blob/master/README_ru.md) - Compatible with Bambu Studio, improves feed tower control, provides accurate time and material consumption estimates, reduces waste, supports Mainsail, quick color changes, and advanced printing features. CANNOT BE USED WITH THE NATIVE SCREEN.
+2. [lessWaste](https://github.com/Hrybmo/lessWaste/blob/master/README_ru.md) - a fork of Bambufy
+3. [Dryer](https://github.com/pantata/dryer) - Drying filament via heated bed
+4. [IFS Jacker](https://github.com/ninjamida/ifs_jacker_plugin) - Plugin to support the [IFS Jacker hardware mod](https://github.com/ninjamida/ifs-jacker), for auto-detection of available channel count and Klipper integration for fans / LEDs / sensors connected via an IFS Jacker
+5. [HelixScreen](https://github.com/prestonbrown/helixscreen) - an alternative screen implementation
+6. [QuickSwap](https://github.com/ninjamida/quickswap-5x) - Plugin for faster color changing on AD5X
+7. [Flook32](https://github.com/ghzserg/flook32_plugin) - Plugin for connecting the [Flook32](https://github.com/schreider/flook32) dryer [En](https://github.com/ghzserg/flook32)
+8. [Print Handy](https://github.com/catduckgnaf/print-handy) - Reports other AD5X IFS slots with the same color and material. It does not switch filament.
+9. [Zmod AFC Lite](https://github.com/DIEHARDave/zmod_afclite) - Shows the AD5X IFS slots or the Creator 5 toolheads as AFC lanes in the Mainsail and Fluidd AFC panels, with load/unload, color, material and Spoolman spool controls.
+
+To enable the repository of external plugins, run the command `PLUGINS`.
+
+---
+
+## Plugin Management
+
+**Enable plugin:**
+```gcode
+ENABLE_PLUGIN name=g28_tenz
+```
+— downloads the plugin and restarts Klipper on success.
+
+**Disable plugin:**
+```gcode
+DISABLE_PLUGIN name=g28_tenz
+```
+
+---
+
+## PLUGINS
+
+Displays the plugin management menu.
+
+<img width="849" height="838" alt="{9D0BE78C-816B-4F22-B3F1-8FC678AD8977}" src="../../images/a23b06e2-abe3-4ff0-93c7-079d2d057e1b.png" />
+
+In this menu you can enable, disable and completely remove additional plugins.
+
+- Left column (activation): click to enable or disable the plugin.
+    - Green button — the plugin is active.
+    - Gray button — the plugin is disabled.
+- Right column (updates): enables or disables automatic updates via Moonraker.
+    - UPDATE: ON — updates are enabled.
+    - UPDATE: OFF — updates are disabled.
+
+**How to completely remove a plugin:**
+
+If you no longer need a plugin, make both of its buttons gray (disable the plugin itself and its updates), press SAVE (MOONRAKER RESTART), and then reboot the printer. The system will automatically delete its folder from `mod_data/plugins/`.
+
+---
+## Installing Classic Klipper Plugins with Python Modules
+
+For classic Klipper plugins that work with Python modules (e.g., [klipper-led_effect](https://github.com/julianschill/klipper-led_effect)), a special installation process is required that involves creating a symbolic link to the Klipper module.
+
+### Example: Installing led_effect
+
+`led_effect` is a plugin for controlling WS2812 RGB LED strips through Klipper.
+
+**Step 1: Clone the repository**
+
+Run these commands in the chroot environment:
+
+```bash
+# For AD5M:
+chroot /data/.mod/.zmod/
+# For AD5X:
+chroot /usr/data/.mod/.zmod/
+
+# Same for all models:
+cd /opt/config/mod_data/plugins/
+git clone https://github.com/julianschill/klipper-led_effect.git
+```
+
+**Step 2: Add an entry to the Moonraker config**
+
+In the file `mod_data/user.moonraker.conf`, add the following section:
+
+```ini
+[update_manager led_effect]
+type: git_repo
+channel: stable
+path: /opt/config/mod_data/plugins/klipper-led_effect
+origin: https://github.com/julianschill/klipper-led_effect.git
+is_system_service: False
+primary_branch: master
+```
+
+**Step 3: Create a symbolic link to the Klipper module**
+
+Create a symbolic link to connect the module to Klipper:
+
+```bash
+exit
+# Native Klipper
+ln -s /opt/config/mod_data/plugins/klipper-led_effect/src/led_effect.py /usr/prog/klipper/klippy/extras/led_effect.py
+# Klipper 13
+ln -s /opt/config/mod_data/plugins/klipper-led_effect/src/led_effect.py /usr/data/zmod/klipper/klippy/extras/led_effect.py
+```
+
+Replace:
+
+- `klipper-led_effect` with your plugin's folder name
+- `led_effect.py` with the module name (may differ depending on the plugin)
+
+**Step 4: Restart Klipper**
+
+After creating the symbolic link, you need to restart Klipper using the restart button in the Fluidd/Mainsail web interface.
+
+### Important Notes
+
+> **The module must be compatible with your Klipper version**
+> Ensure that the plugin version is compatible with your installed Klipper version.
+
+---
+## Creating Your Own Plugin
+
+Plugin example: https://github.com/ghzserg/g28_tenz
+(In all examples below, the name `g28_tenz` is used — replace it with your plugin’s name.)
+
+---
+
+### Adding a Plugin
+
+In the file
+```mod_data/user.moonraker.conf```
+add the following section:
+
+```ini
+[update_manager g28_tenz]
+type: git_repo
+channel: dev
+path: /root/printer_data/config/mod_data/plugins/g28_tenz
+origin: https://github.com/ghzserg/g28_tenz.git
+is_system_service: False
+primary_branch: main
+```
+
+- **Plugin path**: `/root/printer_data/config/mod_data/plugins/g28_tenz`
+- **Source**: `https://github.com/ghzserg/g28_tenz.git`
+
+> Stable plugins may be included in the zmod distribution, but are updated and maintained by their respective authors.
+
+---
+
+### Installation Script
+
+After calling `ENABLE_PLUGIN`, the file `install.sh` will be executed automatically.
+
+After calling `DISABLE_PLUGIN`, the file `uninstall.sh` will be executed automatically.
+
+### Update Script
+
+When the Update Manager updates the plugin, `update.sh` will be executed automatically if it exists.
+
+### Single-language Plugin
+Must contain the file:
+```
+g28_tenz.cfg
+```
+All functionality goes inside this file.
+
+### Multi-language Plugin
+Files are placed in language-specific subdirectories:
+```
+en/g28_tenz.cfg
+ru/g28_tenz.cfg
+de/g28_tenz.cfg
+...
+```
+
+All output strings must be escaped, for example:
+```gcode
+RESPOND PREFIX="info" MSG="===Cutting the filament==="
+```
+
+---
+
+#### Translation
+
+Translations are stored in the `translate/` directory in files like `de.csv`:
+
+```csv
+Cutting the filament;Schneiden des Filaments
+```
+
+Format:
+```
+English phrase;Translation in target language
+```
+
+To generate language files, run:
+```bash
+./Make.sh
+```
+The script will create the required directories and `.cfg` files.

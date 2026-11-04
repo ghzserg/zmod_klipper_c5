@@ -1,0 +1,209 @@
+# Плагины в Z-Mod
+
+Любой пользователь может создать и подключить свой плагин к **zmod**.
+
+Плагины, включённые в поставку Z-Mod:
+
+1. [Recommend](https://github.com/ghzserg/recommend/blob/main/Readme_ru.md) - Настройки, которые рекомендуется использовать сразу после установки мода
+2. [G28_tenz](https://github.com/ghzserg/g28_tenz/blob/main/Readme_ru.md) - Парковка оси Z по тензодатчикам
+3. [Nopoop](https://github.com/ghzserg/nopoop/blob/master/Readme_ru.md) - Максимальное уменьшение количества отходов от ninjamida.
+4. [TimeLapse](https://github.com/ghzserg/timelapse/blob/main/Readme_ru.md) - Moonraker TimeLapse
+5. [Notify](https://github.com/ghzserg/notify/blob/main/Readme_ru.md) - Получение уведомлений в Telegram и более чем 100 других сервисах
+
+Внешние плагины, не разрабатываемые автором Z-Mod. 
+
+1. [Bambufy](https://github.com/function3d/bambufy/blob/master/README_ru.md) - Совместим с Bambu Studio, улучшает управление башней подачи, обеспечивает точную оценку времени и расхода материала, снижает отходы, поддерживает Mainsail, быструю смену цвета и расширенные функции печати. НЕЛЬЗЯ ИСПОЛЬЗОВАТЬ С РОДНЫМ ЭКРАНОМ.
+2. [lessWaste](https://github.com/Hrybmo/lessWaste/blob/master/README_ru.md) - форк Bambufy
+3. [Dryer](https://github.com/pantata/dryer) - Сушка филамента на нагревательном столе
+4. [IFS Jacker](https://github.com/ninjamida/ifs_jacker_plugin) — Плагин для поддержки [железа IFS Jacker](https://github.com/ninjamida/ifs-jacker); обеспечивает автоопределение количества доступных каналов и интеграцию в Klipper вентиляторов, светодиодов и датчиков, подключенных через IFS Jacker.
+5. [HelixScreen](https://github.com/prestonbrown/helixscreen) - альтернативная реализация экрана
+6. [QuickSwap](https://github.com/ninjamida/quickswap-5x) - Плагин для более быстрой смены цветов на AD5X
+7. [Flook32](https://github.com/ghzserg/flook32_plugin) - Плагин для подключения сушилки [Flook32](https://github.com/schreider/flook32) [En](https://github.com/ghzserg/flook32)
+8. [Print Handy](https://github.com/catduckgnaf/print-handy) - Показывает другие слоты IFS на AD5X с тем же цветом и материалом. Филамент не переключает.
+9. [Zmod AFC Lite](https://github.com/DIEHARDave/zmod_afclite) - Показывает слоты IFS на AD5X или головы Creator 5 как линии AFC в панелях AFC Mainsail и Fluidd: загрузка/выгрузка, цвет, материал и катушки Spoolman.
+
+Чтобы включить репозиторий внешних плагинов, выполните команду `PLUGINS`.
+
+---
+
+## Управление плагином
+
+**Включить плагин:**
+```gcode
+ENABLE_PLUGIN name=g28_tenz
+```
+— скачает плагин и перезапустит Klipper при успехе.
+
+**Выключить плагин:**
+```gcode
+DISABLE_PLUGIN name=g28_tenz
+```
+---
+
+## PLUGINS
+
+Выводит меню управления плагинами 
+
+<img width="849" height="838" alt="{9D0BE78C-816B-4F22-B3F1-8FC678AD8977}" src="../../images/a23b06e2-abe3-4ff0-93c7-079d2d057e1b.png" />
+
+В этом меню вы можете включать, выключать и полностью удалять дополнительные плагины.
+
+- Левый столбец (активация): нажмите, чтобы включить или выключить плагин.
+    - Зелёная кнопка — плагин активен.
+    - Серая кнопка — плагин выключен.
+- Правый столбец (обновления): включает или выключает автоматические обновления через Moonraker.
+    - UPDATE: ON — обновления включены.
+    - UPDATE: OFF — обновления отключены.
+
+**Как полностью удалить плагин:**
+
+Если плагин вам больше не нужен, сделайте обе его кнопки серыми (отключите сам плагин и его обновления), нажмите кнопку SAVE (MOONRAKER RESTART), а затем перезагрузите принтер. Система автоматически сотрёт его папку из директории `mod_data/plugins/`.
+
+---
+
+## Установка классических плагинов Klipper с Python модулями
+
+Для классических плагинов Klipper, которые работают с использованием Python модулей (например, [klipper-led_effect](https://github.com/julianschill/klipper-led_effect)), требуется специальный процесс установки с созданием символической ссылки на модуль Klipper.
+
+### Пример: Установка led_effect
+
+`led_effect` — это плагин для управления WS2812 RGB LED полосками через Klipper.
+
+**Шаг 1: Клонируем репозиторий**
+
+Выполните эти команды в chroot окружении:
+
+```bash
+# Для FF5M:
+chroot /data/.mod/.zmod/
+# Для FF5X:
+chroot /usr/data/.mod/.zmod/
+
+# Одинаково для всех моделей:
+cd /opt/config/mod_data/plugins/
+git clone https://github.com/julianschill/klipper-led_effect.git
+```
+
+**Шаг 2: Добавляем запись в Moonraker config**
+
+В файле `mod_data/user.moonraker.conf` добавьте следующую секцию:
+
+```ini
+[update_manager led_effect]
+type: git_repo
+channel: stable
+path: /opt/config/mod_data/plugins/klipper-led_effect
+origin: https://github.com/julianschill/klipper-led_effect.git
+is_system_service: False
+primary_branch: master
+```
+
+**Шаг 3: Создаём символическую ссылку на модуль Klipper**
+
+Создайте символическую ссылку для подключения модуля к Klipper:
+
+```bash
+exit
+# Native Klipper
+ln -s /opt/config/mod_data/plugins/klipper-led_effect/src/led_effect.py /usr/prog/klipper/klippy/extras/led_effect.py
+# Klipper 13
+ln -s /opt/config/mod_data/plugins/klipper-led_effect/src/led_effect.py /usr/data/zmod/klipper/klippy/extras/led_effect.py
+```
+
+Замените:
+
+- `klipper-led_effect` на папку вашего плагина
+- `led_effect.py` на имя модуля (может быть другой в зависимости от плагина)
+
+**Шаг 4: Перезагружаем Klipper**
+
+После создания символической ссылки необходимо перезагрузить Klipper через веб-интерфейс Fluidd/Mainsail, нажав кнопку перезагрузки.
+
+### Важные замечания
+
+> **Модуль должен быть совместим с версией Klipper**
+> Убедитесь, что версия плагина совместима с установленной версией Klipper.
+
+---
+
+## Создание собственного плагина
+
+Пример плагина: https://github.com/ghzserg/g28_tenz
+(Во всех примерах ниже используется имя `g28_tenz` — замените его на имя вашего плагина.)
+
+---
+
+### Добавление плагина
+
+В файле
+```mod_data/user.moonraker.conf```
+добавьте секцию:
+
+```ini
+[update_manager g28_tenz]
+type: git_repo
+channel: dev
+path: /root/printer_data/config/mod_data/plugins/g28_tenz
+origin: https://github.com/ghzserg/g28_tenz.git
+is_system_service: False
+primary_branch: main
+```
+
+- **Путь к плагину**: `/root/printer_data/config/mod_data/plugins/g28_tenz`
+- **Источник**: `https://github.com/ghzserg/g28_tenz.git`
+
+> Стабильные плагины могут быть включены в поставку zmod, но обновляются и управляются их авторами.
+
+---
+
+### Скрипт установки
+
+После вызова `ENABLE_PLUGIN`, будет автоматически вызван файл `install.sh`
+
+После вызова `DISABLE_PLUGIN`, будет автоматически вызван файл `uninstall.sh`
+
+### Скрипт обновления
+
+Когда менеджер обновлений обновляет плагин, файл `update.sh` будет автоматически выполнен, если он существует.
+
+### Одноязычный плагин
+Должен содержать файл:
+```
+g28_tenz.cfg
+```
+В нём — весь функционал.
+
+### Многоязычный плагин
+Файлы размещаются в подкаталогах по языкам:
+```
+en/g28_tenz.cfg
+ru/g28_tenz.cfg
+de/g28_tenz.cfg
+...
+```
+
+Все строки вывода должны быть экранированы, например:
+```gcode
+RESPOND PREFIX="info" MSG="===Cutting the filament==="
+```
+
+---
+
+#### Перевод
+
+Переводы хранятся в каталоге `translate/` в файлах вида `de.csv`:
+
+```csv
+Cutting the filament;Filament schneiden
+```
+
+Формат:
+```
+Английская фраза;Перевод на нужный язык
+```
+
+Чтобы сгенерировать языковые файлы, выполните:
+```bash
+./Make.sh
+```
+Скрипт создаст нужные каталоги и `.cfg`-файлы.
