@@ -1,0 +1,11 @@
+extras/ens160.py
+extras/flook32.py
+extras/gcode_shell_command.py
+extras/ifs_jacker*.py
+extras/led_effect.py
+extras/virtual_sdcard.py
+extras/zmod_afclite.py
+extras/zmod_color.py
+extras/zmod.py
+*.pyc
+*/*.so
