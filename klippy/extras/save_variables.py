@@ -4,6 +4,7 @@
 # Copyright (C) 2016-2020  Kevin O'Connor <kevin@koconnor.net>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
+# zmod save_variables 2
 import os, logging, ast, configparser
 
 class SaveVariables:
@@ -20,6 +21,8 @@ class SaveVariables:
         gcode = self.printer.lookup_object('gcode')
         gcode.register_command('SAVE_VARIABLE', self.cmd_SAVE_VARIABLE,
                                desc=self.cmd_SAVE_VARIABLE_help)
+        gcode.register_command('ZLOAD_VARIABLE', self.cmd_ZLOAD_VARIABLE,
+                               desc=self.cmd_ZLOAD_VARIABLE_help)
     def loadVariables(self):
         allvars = {}
         varfile = configparser.ConfigParser()
@@ -33,6 +36,9 @@ class SaveVariables:
             logging.exception(msg)
             raise self.printer.command_error(msg)
         self.allVariables = allvars
+    cmd_ZLOAD_VARIABLE_help = "LOAD arbitrary variables to disk"
+    def cmd_ZLOAD_VARIABLE(self, gcmd):
+        self.loadVariables()
     cmd_SAVE_VARIABLE_help = "Save arbitrary variables to disk"
     def cmd_SAVE_VARIABLE(self, gcmd):
         varname = gcmd.get('VARIABLE')
@@ -41,6 +47,9 @@ class SaveVariables:
             value = ast.literal_eval(value)
         except ValueError as e:
             raise gcmd.error("Unable to parse '%s' as a literal" % (value,))
+        old = self.allVariables.get(varname)
+        if varname in self.allVariables and type(old) is type(value) and old == value:
+            return
         newvars = dict(self.allVariables)
         newvars[varname] = value
         # Write file
