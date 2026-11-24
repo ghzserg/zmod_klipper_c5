@@ -56,7 +56,8 @@ class QueueListener(logging.handlers.RotatingFileHandler):
         lines.append(
             "=============== Log rollover at %s ===============" % (
                 time.asctime(),))
-        self.emit(logging.makeLogRecord(
+        # Bypass rotating handler's emit() to avoid re-entering doRollover.
+        logging.FileHandler.emit(self, logging.makeLogRecord(
             {'msg': "\n".join(lines), 'level': logging.INFO}))
 
 MainQueueHandler = None
