@@ -265,7 +265,7 @@ class SerialReader:
                                       cmd, len(cmd), minclock, reqclock, nid)
         params = completion.wait()
         if params is None:
-            self._error("No communication with MCU")
+            self._error("Serial connection closed")
         return params
     def send(self, msg, minclock=0, reqclock=0):
         cmd = self.msgparser.create_command(msg)
