@@ -50,7 +50,7 @@ class PIDCalibrate:
         configfile.set(cfgname, 'pid_Ki', "%.3f" % (Ki,))
         configfile.set(cfgname, 'pid_Kd', "%.3f" % (Kd,))
 
-TUNE_PID_DELTA = 5.0
+TUNE_PID_DELTA = 2.5
 
 class ControlAutoTune:
     def __init__(self, heater, target):
@@ -116,7 +116,8 @@ class ControlAutoTune:
         time_diff = self.peaks[pos][1] - self.peaks[pos-2][1]
         # Use Astrom-Hagglund method to estimate Ku and Tu
         amplitude = .5 * abs(temp_diff)
-        Ku = 4. * self.heater_max_power / (math.pi * amplitude)
+        power_amplitude = .5 * self.heater_max_power
+        Ku = 4. * power_amplitude / (math.pi * amplitude)
         Tu = time_diff
         # Use Ziegler-Nichols method to generate PID parameters
         Ti = 0.5 * Tu
