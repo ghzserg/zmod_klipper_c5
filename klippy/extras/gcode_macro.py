@@ -49,6 +49,13 @@ class TemplateWrapper:
         self.create_template_context = gcode_macro.create_template_context
         try:
             self.template = env.from_string(script)
+        except jinja2.exceptions.TemplateSyntaxError as e:
+            lines = script.splitlines()
+            line = lines[e.lineno - 1] if 0 < e.lineno <= len(lines) else ""
+            msg = "Error loading template '%s', line %d: %s (%s)" % (
+                name, e.lineno, line.strip(), e.message)
+            logging.exception(msg)
+            raise printer.config_error(msg)
         except Exception as e:
             msg = "Error loading template '%s': %s" % (
                  name, traceback.format_exception_only(type(e), e)[-1])
