@@ -69,6 +69,11 @@ class PrinterOutputPin:
     def _set_pin(self, print_time, value, is_resend=False):
         if value == self.last_value and not is_resend:
             return
+        mcu = self.mcu_pin.get_mcu()
+        if not mcu.is_fileoutput():
+            eventtime = self.reactor.monotonic()
+            min_print_time = mcu.estimated_print_time(eventtime) + PIN_MIN_TIME
+            print_time = max(print_time, min_print_time)
         print_time = max(print_time, self.last_print_time + PIN_MIN_TIME)
         if self.is_pwm:
             self.mcu_pin.set_pwm(print_time, value)
