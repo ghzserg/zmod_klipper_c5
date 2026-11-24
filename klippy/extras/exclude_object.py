@@ -8,6 +8,8 @@ import sys, os
 import logging
 import json
 
+LARGE_EXTRUDER_ADJUSTMENT = 5.0
+
 class ExcludeObject:
     def __init__(self, config):
         self.printer = config.get_printer()
