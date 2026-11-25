@@ -204,10 +204,19 @@ def measure(tester, gcmd, fft):
         finally:
             toolhead.set_max_velocities(None, status['max_accel'], None,
                                         status['minimum_cruise_ratio'])
-    # Matplotlib запускается отдельным процессом после восстановления MCU.
+    # Как у графиков шейперов: системный Python внутри chroot Z-Mod.
+    # Не передаём пути и библиотеки Python заводской прошивки в chroot.
+    env = os.environ.copy()
+    for key in ('LD_PRELOAD', 'LD_LIBRARY_PATH', 'PYTHONHOME', 'PYTHONPATH'):
+        env.pop(key, None)
+    env['PATH'] = '/bin:/sbin:/usr/bin:/usr/sbin'
+    plot_folder = os.path.join('/opt/config/mod_data/vfa',
+                               os.path.basename(folder))
     try:
-        proc = subprocess.Popen(['python3', os.path.abspath(__file__),
-                                 folder] + names)
+        proc = subprocess.Popen([
+            '/bin/sh', '/usr/data/zmod/zmod/.shell/chroot.sh',
+            'python3', '/usr/data/zmod/klipper/klippy/extras/vfa_graph.py',
+            plot_folder] + names, env=env)
     except OSError as exc:
         raise gcmd.error("VFA: CSV saved in %s; plot failed: %s" % (folder, exc))
     deadline = reactor.monotonic() + 120.
