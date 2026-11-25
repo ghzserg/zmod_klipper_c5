@@ -338,6 +338,8 @@ class StepperResonanceTester:
         self.gcode.register_command("STEPPER_RESONANCE_CURVE_TEST",
                                     self.cmd_STEPPER_RESONANCE_CURVE_TEST,
                                     desc=self.cmd_STEPPER_RESONANCE_CURVE_TEST_help)
+        self.gcode.register_command("VFA_GRAPH", self.cmd_VFA_GRAPH,
+                                    desc="Measure VFA with and without compensation")
         self.gcode.register_command("STEPPER_RESONANCE_MESH_TEST",
                                     self.cmd_STEPPER_RESONANCE_MESH_TEST,
                                     desc=self.cmd_STEPPER_RESONANCE_MESH_TEST_help)
@@ -764,6 +766,10 @@ class StepperResonanceTester:
         csv_header = ["count"] + ["td%d_%s_amp" % (v, self.axis) for v in self.tdx]
         self.save_to_csv(filename, result, header=csv_header, format_spec='%.6f')
         gcmd.respond_info("Writing stepper resonance test result to %s file" % (filename,))
+
+    def cmd_VFA_GRAPH(self, gcmd):
+        from . import vfa_graph
+        vfa_graph.measure(self, gcmd, harmonic_extract_using_fft)
 
     # Test the relationship of resonance_amp and vel
     cmd_STEPPER_RESONANCE_CURVE_TEST_help = ("Test the resonance amp vs velocity for a stepper")
