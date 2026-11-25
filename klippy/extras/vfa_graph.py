@@ -122,7 +122,6 @@ def measure(tester, gcmd, fft):
     if axis not in ('X', 'Y', 'XY'):
         raise gcmd.error("AXIS must be X, Y or XY")
     speeds = speeds_for(gcmd, status['max_velocity'])
-    # Штатная смена инструмента проверяет датчики и выполняет хоуминг.
     color = printer.lookup_object('zmod_color', None)
     if color is None or color._get_active_extruder(gcmd) == -2:
         raise gcmd.error("VFA: invalid tool sensor state")
@@ -154,7 +153,6 @@ def measure(tester, gcmd, fft):
                                         status['minimum_cruise_ratio'])
             if not absolute and not printer.is_shutdown():
                 tester.gcode.run_script_from_command("G91")
-    # Графики строятся только после возврата инструмента.
     render(tester, gcmd, folder, names)
 
 
@@ -163,7 +161,6 @@ def measure_selected(tester, gcmd, fft, t, axis, speeds):
     now = printer.get_reactor().monotonic()
     toolhead = printer.lookup_object('toolhead')
     status = toolhead.get_status(now)
-    # Проверяем, что взят именно запрошенный инструмент.
     attached = []
     undocked = []
     for i in range(1, 5):
@@ -186,7 +183,6 @@ def measure_selected(tester, gcmd, fft, t, axis, speeds):
         raise gcmd.error("No saved VFA compensation; calibrate VFA first")
     names = [name for name in MOTORS if name[-1].upper() in axis]
     accel = min(tester.move_accel, status['max_accel'])
-    # Используем штатные траектории калибровки и машинные координаты.
     tester.move_params = None
     paths = {}
     for name in names:
@@ -248,7 +244,6 @@ def measure_selected(tester, gcmd, fft, t, axis, speeds):
 def render(tester, gcmd, folder, names):
     printer = tester.printer
     reactor = printer.get_reactor()
-    # Как у графиков шейперов: системный Python внутри chroot Z-Mod.
     # Не передаём пути и библиотеки Python заводской прошивки в chroot.
     env = os.environ.copy()
     for key in ('LD_PRELOAD', 'LD_LIBRARY_PATH', 'PYTHONHOME', 'PYTHONPATH'):

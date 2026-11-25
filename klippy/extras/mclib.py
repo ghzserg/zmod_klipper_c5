@@ -132,7 +132,6 @@ class MCLIB:
         self.set_resonance_damping(tdx, amp, phase1, phase2)
 
     def set_resonance_damping(self, tdx, amp, phase1, phase2):
-        # Храним фактически отправленные значения, в единицах MCU.
         if self.set_resonance_damp_cmd is None:
             self.mcu.add_config_cmd(
                 "mclib_set_resonance_damp oid=%d tdx=%d amp=%u phase1=%u phase2=%u"
