@@ -117,11 +117,53 @@ def measure(tester, gcmd, fft):
     if (stats is None or stats.get_status(now)['state'] in ('printing', 'paused')
             or (pause is not None and pause.get_status(now)['is_paused'])):
         raise gcmd.error("VFA_GRAPH is unavailable during printing or pause")
-    if not all(axis in status['homed_axes'] for axis in 'xyz'):
-        raise gcmd.error("Home XYZ before VFA_GRAPH")
-    if status['position'][2] < 100.:
-        raise gcmd.error("Move Z to at least 100 mm and clear the bed before VFA_GRAPH")
-    # Проверяем датчики всех четырёх инструментов, не меняя инструмент.
+    t = gcmd.get_int('T', 0, minval=0, maxval=3)
+    axis = gcmd.get('AXIS', 'XY').upper()
+    if axis not in ('X', 'Y', 'XY'):
+        raise gcmd.error("AXIS must be X, Y or XY")
+    speeds = speeds_for(gcmd, status['max_velocity'])
+    # Штатная смена инструмента проверяет датчики и выполняет хоуминг.
+    color = printer.lookup_object('zmod_color', None)
+    if color is None or color._get_active_extruder(gcmd) == -2:
+        raise gcmd.error("VFA: invalid tool sensor state")
+    absolute = printer.lookup_object('gcode_move').get_status(now)['absolute_coordinates']
+    selected = False
+    try:
+        tester.gcode.run_script_from_command("G90\n_T_IN T=%d" % t)
+        selected = True
+        tester.gcode.run_script_from_command(
+            "_SET_GCODE_OFFSET_FAST X=0 Y=0 Z=0 FROM=VFA_GRAPH\nM400")
+        current = toolhead.get_status(reactor.monotonic())
+        if not all(a in current['homed_axes'] for a in 'xyz'):
+            raise gcmd.error("VFA: XYZ not homed after tool selection")
+        if current['position'][2] < 100.:
+            toolhead.manual_move([None, None, 100.], 20.)
+        toolhead.wait_moves()
+        # _T_IN меняет ускорение; тест использует исходный лимит.
+        toolhead.set_max_velocities(None, status['max_accel'], None,
+                                    status['minimum_cruise_ratio'])
+        folder, names = measure_selected(tester, gcmd, fft, t, axis, speeds)
+    finally:
+        try:
+            if selected and not printer.is_shutdown():
+                current = toolhead.get_status(reactor.monotonic())
+                if all(a in current['homed_axes'] for a in 'xyz'):
+                    tester.gcode.run_script_from_command("_T_OUT NO_Z=0\nM400")
+        finally:
+            toolhead.set_max_velocities(None, status['max_accel'], None,
+                                        status['minimum_cruise_ratio'])
+            if not absolute and not printer.is_shutdown():
+                tester.gcode.run_script_from_command("G91")
+    # Графики строятся только после возврата инструмента.
+    render(tester, gcmd, folder, names)
+
+
+def measure_selected(tester, gcmd, fft, t, axis, speeds):
+    printer = tester.printer
+    now = printer.get_reactor().monotonic()
+    toolhead = printer.lookup_object('toolhead')
+    status = toolhead.get_status(now)
+    # Проверяем, что взят именно запрошенный инструмент.
     attached = []
     undocked = []
     for i in range(1, 5):
@@ -133,12 +175,8 @@ def measure(tester, gcmd, fft):
             attached.append(i)
         if dock.get_status(now)['state'] == 'RELEASED':
             undocked.append(i)
-    if len(attached) != 1 or attached != undocked:
-        raise gcmd.error("Attach exactly one tool and dock all other tools")
-    axis = gcmd.get('AXIS', 'XY').upper()
-    if axis not in ('X', 'Y', 'XY'):
-        raise gcmd.error("AXIS must be X, Y or XY")
-    speeds = speeds_for(gcmd, status['max_velocity'])
+    if attached != [t + 1] or attached != undocked:
+        raise gcmd.error("VFA: requested tool T%d is not securely attached" % t)
     motors = {name: printer.lookup_object('mclib ' + name) for name in MOTORS}
     if any(m.set_resonance_damp_cmd is None for m in motors.values()):
         raise gcmd.error("VFA: MCU is not ready")
@@ -167,7 +205,7 @@ def measure(tester, gcmd, fft):
                         'mod_data', 'vfa')
     try:
         os.makedirs(root, exist_ok=True)
-        folder = tempfile.mkdtemp(prefix='vfa_', dir=root)
+        folder = tempfile.mkdtemp(prefix='vfa_T%d_' % t, dir=root)
     except OSError as exc:
         raise gcmd.error("VFA: cannot create output directory: %s" % exc)
     toolhead.wait_moves()
@@ -204,6 +242,12 @@ def measure(tester, gcmd, fft):
         finally:
             toolhead.set_max_velocities(None, status['max_accel'], None,
                                         status['minimum_cruise_ratio'])
+    return folder, names
+
+
+def render(tester, gcmd, folder, names):
+    printer = tester.printer
+    reactor = printer.get_reactor()
     # Как у графиков шейперов: системный Python внутри chroot Z-Mod.
     # Не передаём пути и библиотеки Python заводской прошивки в chroot.
     env = os.environ.copy()
@@ -256,7 +300,8 @@ def plot(folder, names):
             ax.set_ylim(bottom=0)
         axes[0].legend(fontsize=8, ncol=2)
         axes[-1].set_xlabel('Toolhead speed (mm/s)')
-        fig.suptitle('VFA — ' + name + ' (gaps: unmeasurable)')
+        fig.suptitle('VFA — ' + name + ' / ' + os.path.basename(folder).split('_')[1]
+                     + ' (gaps: unmeasurable)')
         fig.tight_layout()
         fig.savefig(os.path.join(folder, name + '.png'), dpi=120)
         plt.close(fig)
