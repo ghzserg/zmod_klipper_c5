@@ -275,6 +275,23 @@ class ClientConnection:
         except (TypeError, ValueError) as e:
             msg = ("json encoding error: %s" % (str(e),))
             logging.exception(msg)
+            # Диагностика только при ошибке: не скрываем неверный тип.
+            if isinstance(data, dict) and 'bool_' in str(e):
+                stack = [('data', data)]
+                visited = set()
+                while stack:
+                    path, value = stack.pop()
+                    if type(value).__name__ == 'bool_':
+                        logging.error("VFA_DIAG JSON bool_ path=%s value=%r",
+                                      path, value)
+                    elif isinstance(value, (dict, list, tuple)):
+                        if id(value) in visited:
+                            continue
+                        visited.add(id(value))
+                        items = (value.items() if isinstance(value, dict)
+                                 else enumerate(value))
+                        stack.extend(('%s[%r]' % (path, k), v)
+                                     for k, v in items)
             self.printer.invoke_shutdown(msg)
             return
         if not self.is_blocking:

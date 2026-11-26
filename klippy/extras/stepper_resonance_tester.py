@@ -499,8 +499,8 @@ class StepperResonanceTester:
         if not np.isfinite([center_x, center_y, angle, distance]).all() or distance <= 0.:
             raise self.printer.command_error("Invalid resonance test path")
         half_dist = distance / 2.0
-        cos_a = np.cos(np.radians(angle))
-        sin_a = np.sin(np.radians(angle))
+        cos_a = float(np.cos(np.radians(angle)))
+        sin_a = float(np.sin(np.radians(angle)))
         dx = half_dist * cos_a
         dy = half_dist * sin_a
         start_x = center_x - dx
@@ -616,7 +616,7 @@ class StepperResonanceTester:
             # (accelerometer timestamps are in the same print_time domain)
             t_move_start = toolhead.get_last_move_time()
             # Move at resonance speed to excite resonance         
-            toolhead.manual_move([end_x, end_y], move_speed)
+            toolhead.manual_move([end_x, end_y], float(move_speed))
             t_move_end = toolhead.get_last_move_time()
             toolhead.dwell(0.2)
             # Wait for all movements to finish
