@@ -76,8 +76,10 @@ def harmonic_extract_using_fft(t, accel, freqs, fs):
     window = np.hanning(N)
     accel_win = accel_ac * window
 
-    fft_result = np.fft.rfft(accel_win)
-    fft_freqs = np.fft.rfftfreq(N, d=1.0/fs)
+    # NumPy 1.16: избегаем медленной FFT на длинах с большими простыми множителями.
+    nfft = 1 << (N - 1).bit_length()
+    fft_result = np.fft.rfft(accel_win, n=nfft)
+    fft_freqs = np.fft.rfftfreq(nfft, d=1.0/fs)
     # Hanning窗幅度校正: 单边幅值 = |X|*4/N (窗均值0.5, 单边×2)
     fft_amps = np.abs(fft_result) * 4.0 / N
 
