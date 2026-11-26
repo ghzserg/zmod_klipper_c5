@@ -24,13 +24,14 @@ TARGET_DURATION = 0.6
 MIN_CYCLES = 20
 
 
-def speeds_for(gcmd, max_velocity):
+def speeds_for(gcmd, max_velocity, ru):
     low = gcmd.get_float('MIN_SPEED', 20., minval=10., maxval=MAX_SPEED)
     high = gcmd.get_float('MAX_SPEED', min(MAX_SPEED, max_velocity),
                           minval=10., maxval=min(MAX_SPEED, max_velocity))
     step = gcmd.get_float('STEP', 10., minval=5., maxval=100.)
     if high <= low:
-        raise gcmd.error("MAX_SPEED must exceed MIN_SPEED")
+        raise gcmd.error("MAX_SPEED должна быть больше MIN_SPEED" if ru else
+                         "MAX_SPEED must exceed MIN_SPEED")
     count = int((high - low) / step)
     return [low + i * step for i in range(count + 1)] + (
         [high] if low + count * step < high - 1.e-6 else [])
@@ -85,7 +86,7 @@ def spectrum(samples, start, end, vel, accel, distance, freqs, angle,
     return fs, duration, len(data), result
 
 
-def sample(tester, gcmd, toolhead, vel, accel, freqs):
+def sample(tester, gcmd, toolhead, vel, accel, freqs, ru):
     start_xy, end_xy = tester.move
     dx, dy = end_xy[0] - start_xy[0], end_xy[1] - start_xy[1]
     distance = math.hypot(dx, dy)
@@ -118,7 +119,8 @@ def sample(tester, gcmd, toolhead, vel, accel, freqs):
                           distance, freqs, angle, chip.data_rate)
         if values is not None:
             return values
-    gcmd.respond_info("VFA: invalid acceleration samples at %.1f mm/s" % vel)
+    gcmd.respond_info(("VFA: недостоверные данные акселерометра при %.1f мм/с" if ru else
+                       "VFA: invalid acceleration samples at %.1f mm/s") % vel)
     return missing
 
 
@@ -143,6 +145,13 @@ def restore_damping(motors, values):
 
 def measure(tester, gcmd):
     printer = tester.printer
+    lang = configparser.ConfigParser()
+    try:
+        lang.read(os.path.join(os.path.dirname(printer.get_start_args()['config_file']),
+                               'mod_data', 'lang.cfg'), encoding='utf-8')
+        ru = lang.get('zmod', 'language', fallback='en') == 'ru'
+    except (OSError, UnicodeError, configparser.Error):
+        ru = False
     reactor = printer.get_reactor()
     now = reactor.monotonic()
     toolhead = printer.lookup_object('toolhead')
@@ -151,27 +160,23 @@ def measure(tester, gcmd):
     pause = printer.lookup_object('pause_resume', None)
     if (stats is None or stats.get_status(now)['state'] in ('printing', 'paused')
             or (pause is not None and pause.get_status(now)['is_paused'])):
-        raise gcmd.error("VFA_GRAPH is unavailable during printing or pause")
+        raise gcmd.error("VFA_GRAPH недоступна во время печати или паузы" if ru else
+                         "VFA_GRAPH is unavailable during printing or pause")
     t = gcmd.get_int('T', 0, minval=0, maxval=3)
     axis = gcmd.get('AXIS', 'XY').upper()
     if axis not in ('X', 'Y', 'XY'):
-        raise gcmd.error("AXIS must be X, Y or XY")
-    speeds = speeds_for(gcmd, status['max_velocity'])
+        raise gcmd.error("AXIS должен быть X, Y или XY" if ru else
+                         "AXIS must be X, Y or XY")
+    speeds = speeds_for(gcmd, status['max_velocity'], ru)
     repeat = gcmd.get_int('REPEAT', 1, minval=1, maxval=10)
     adaptive = gcmd.get_int('ADAPTIVE', 1, minval=0, maxval=1)
     color = printer.lookup_object('zmod_color', None)
     if color is None or color._get_active_extruder(gcmd) == -2:
-        raise gcmd.error("VFA: invalid tool sensor state")
+        raise gcmd.error("VFA: неверное состояние датчиков инструмента" if ru else
+                         "VFA: invalid tool sensor state")
     absolute = printer.lookup_object('gcode_move').get_status(now)['absolute_coordinates']
-    lang = configparser.ConfigParser()
-    try:
-        lang.read(os.path.join(os.path.dirname(printer.get_start_args()['config_file']),
-                               'mod_data', 'lang.cfg'), encoding='utf-8')
-        ru = lang.get('zmod', 'language', fallback='en') == 'ru'
-    except (OSError, UnicodeError, configparser.Error):
-        ru = False
-    gcmd.respond_info("VFA (Z-Mod): начаты измерения. Ждите." if ru else
-                      "VFA (Z-Mod): measurements started. Please wait.")
+    gcmd.respond_info("VFA: начаты измерения. Ждите." if ru else
+                      "VFA: measurements started. Please wait.")
     selected = False
     try:
         tester.gcode.run_script_from_command("G90\n_T_IN T=%d" % t)
@@ -180,7 +185,8 @@ def measure(tester, gcmd):
             "_SET_GCODE_OFFSET_FAST X=0 Y=0 Z=0 FROM=VFA_GRAPH\nM400")
         current = toolhead.get_status(reactor.monotonic())
         if not all(a in current['homed_axes'] for a in 'xyz'):
-            raise gcmd.error("VFA: XYZ not homed after tool selection")
+            raise gcmd.error("VFA: не определено исходное положение осей XYZ после выбора инструмента" if ru else
+                         "VFA: XYZ not homed after tool selection")
         if current['position'][2] < 100.:
             toolhead.manual_move([None, None, 100.], 20.)
         toolhead.wait_moves()
@@ -214,16 +220,19 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat, adaptive, ru):
         grab = printer.lookup_object('gcode_button extruder_grab%d' % i, None)
         dock = printer.lookup_object('gcode_button extruder_pos%d' % i, None)
         if grab is None or dock is None:
-            raise gcmd.error("VFA_GRAPH requires Creator 5 tool sensors")
+            raise gcmd.error("VFA_GRAPH требует датчики инструмента Creator 5" if ru else
+                         "VFA_GRAPH requires Creator 5 tool sensors")
         if grab.get_status(now)['state'] == 'PRESSED':
             attached.append(i)
         if dock.get_status(now)['state'] == 'RELEASED':
             undocked.append(i)
     if attached != [t + 1] or attached != undocked:
-        raise gcmd.error("VFA: requested tool T%d is not securely attached" % t)
+        raise gcmd.error(("VFA: инструмент T%d не закреплён" if ru else
+                          "VFA: requested tool T%d is not securely attached") % t)
     motors = {name: printer.lookup_object('mclib ' + name) for name in MOTORS}
     if any(m.set_resonance_damp_cmd is None for m in motors.values()):
-        raise gcmd.error("VFA: MCU is not ready")
+        raise gcmd.error("VFA: MCU не готов" if ru else
+                         "VFA: MCU is not ready")
     configured = {name: dict(m.configured_damping) for name, m in motors.items()}
     previous = {name: dict(m.current_damping) for name, m in motors.items()}
     disabled = {name: {h: (0, 0, 0) for h in HARMONICS} for name in MOTORS}
@@ -236,14 +245,16 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat, adaptive, ru):
     names = [name for name in MOTORS if name[-1].upper() in axis]
     accel = min(MAX_ACCEL, tester.move_accel, status['max_accel'])
     if tester.kin != 'corexy':
-        raise gcmd.error("VFA_GRAPH requires CoreXY kinematics")
+        raise gcmd.error("VFA_GRAPH требует кинематику CoreXY" if ru else
+                         "VFA_GRAPH requires CoreXY kinematics")
     x_min = max(0., tester.x_min, status['axis_minimum'][0]) + MARGIN
     x_max = min(BED_MAX, tester.x_max, status['axis_maximum'][0]) - MARGIN
     y_min = max(0., tester.y_min, status['axis_minimum'][1]) + MARGIN
     y_max = min(BED_MAX, tester.y_max, status['axis_maximum'][1]) - MARGIN
     side = min(x_max - x_min, y_max - y_min)
     if side <= 0.:
-        raise gcmd.error("VFA: no safe diagonal inside configured limits")
+        raise gcmd.error("VFA: нет безопасной диагонали в заданных границах" if ru else
+                         "VFA: no safe diagonal inside configured limits")
     # Равные проекции диагонали нужны для движения одного мотора CoreXY.
     cx, cy = (x_min + x_max) / 2., (y_min + y_max) / 2.
     ratio = math.sqrt(2.)
@@ -278,8 +289,10 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat, adaptive, ru):
             except FileExistsError:
                 index += 1
                 folder = os.path.join(root, '%s_%02d' % (stamp, index))
-    except OSError as exc:
-        raise gcmd.error("VFA: cannot create output directory: %s" % exc)
+    except OSError:
+        logging.exception("VFA: cannot create output directory")
+        raise gcmd.error("VFA: не удалось создать каталог результатов" if ru else
+                         "VFA: cannot create output directory")
     metadata = {'tool': t, 'language': 'ru' if ru else 'en',
                 'repeat': repeat, 'accel': accel,
                 'adaptive': bool(adaptive), 'target_duration_s': TARGET_DURATION,
@@ -318,13 +331,19 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat, adaptive, ru):
                             apply_damping(motors, modes[label])
                             for direction in (1, 0):
                                 tester.move = path if direction == 1 else path[::-1]
+                                mode = (('без компенсации' if label == 'before' else 'с компенсацией')
+                                        if ru else
+                                        ('without compensation' if label == 'before' else 'with compensation'))
+                                move_dir = (('прямой' if direction else 'обратный')
+                                            if ru else ('forward' if direction else 'reverse'))
                                 gcmd.respond_info(
-                                    "VFA %s %s DIR=%d %.1f mm/s %d/%d"
-                                    % (label, name, direction, vel, trial + 1, repeat))
+                                    ("VFA: двигатель %s, %s, %s проход, %.1f мм/с, %d/%d" if ru else
+                                     "VFA: motor %s, %s, %s pass, %.1f mm/s, %d/%d")
+                                    % (name[-1].upper(), mode, move_dir, vel, trial + 1, repeat))
                                 toolhead.dwell(.2)
                                 toolhead.wait_moves()
                                 fs, duration, count, amps = sample(
-                                    tester, gcmd, toolhead, vel, accel, freqs)
+                                    tester, gcmd, toolhead, vel, accel, freqs, ru)
                                 for h, freq, values in zip(HARMONICS, freqs, amps):
                                     band = ('unmeasured' if not math.isfinite(values[2])
                                             else 'caution' if freq > CAUTION_FREQ
@@ -367,15 +386,19 @@ def render(tester, gcmd, folder, names, ru):
             'python3', '/usr/data/zmod/klipper/klippy/extras/vfa_graph.py',
             plot_folder] + names, env=env)
     except OSError as exc:
-        raise gcmd.error("VFA: CSV saved in %s; plot failed: %s" % (folder, exc))
+        logging.exception("VFA: cannot start graph generation")
+        raise gcmd.error(("VFA: не удалось построить графики. CSV: %s" if ru else
+                          "VFA: plot failed. CSV: %s") % location)
     deadline = reactor.monotonic() + 120.
     try:
         while proc.poll() is None:
             if printer.is_shutdown() or reactor.monotonic() >= deadline:
-                raise gcmd.error("VFA: graph generation interrupted; CSV: " + folder)
+                raise gcmd.error(("VFA: построение графиков прервано. CSV: " if ru else
+                                  "VFA: graph generation interrupted. CSV: ") + location)
             reactor.pause(reactor.monotonic() + .1)
         if proc.returncode:
-            raise gcmd.error("VFA: plot failed; CSV saved in " + folder)
+            raise gcmd.error(("VFA: не удалось построить графики. CSV: " if ru else
+                              "VFA: plot failed. CSV: ") + location)
     finally:
         if proc.poll() is None:
             proc.kill()
@@ -383,10 +406,12 @@ def render(tester, gcmd, folder, names, ru):
     try:
         with open(os.path.join(folder, 'summary.json'), encoding='utf-8') as f:
             summary = json.load(f)
-    except (OSError, ValueError) as exc:
-        raise gcmd.error("VFA: summary unavailable; PNG and CSV: %s (%s)" % (folder, exc))
-    messages = ["VFA (Z-Mod): расчёт окончен." if ru else
-                "VFA (Z-Mod): calculation finished."]
+    except (OSError, ValueError):
+        logging.exception("VFA: summary unavailable")
+        raise gcmd.error(("VFA: сводка недоступна. PNG и CSV: %s" if ru else
+                          "VFA: summary unavailable. PNG and CSV: %s") % location)
+    messages = ["VFA: расчёт окончен." if ru else
+                "VFA: calculation finished."]
     for name in names:
         item = summary[name]
         motor = ('Двигатель ' if ru else 'Motor ') + name[-1].upper()
@@ -401,7 +426,7 @@ def render(tester, gcmd, folder, names, ru):
             messages.append(("%s: %.3f → %.3f мкм (%d пар)." if ru else
                              "%s: %.3f → %.3f µm (%d pairs).") %
                             (motor, item['off_um'], item['on_um'], item['points']))
-    messages.insert(1, "Поперечное смещение датчика: медиана амплитуд до 400 Гц, OFF → ON."
+    messages.insert(1, "Поперечное смещение датчика: медиана амплитуд до 400 Гц, без компенсации → с компенсацией."
                     if ru else
                     "Transverse sensor displacement: median amplitudes up to 400 Hz, OFF → ON.")
     messages.append(("Графики и CSV: Конфигурация → %s" if ru else
