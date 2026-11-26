@@ -441,7 +441,8 @@ def render(tester, gcmd, folder, names, ru):
                 speeds = sorted({point['speed'] for point in item['growth']
                                  if point['td'] == h})
                 if speeds:
-                    groups.append('TD%d: %s' % (h, ', '.join('%g' % v for v in speeds)))
+                    groups.append(('Гармоника %d: %s' if ru else 'Harmonic %d: %s')
+                                  % (h, ', '.join('%g' % v for v in speeds)))
             if groups:
                 messages.append(('  Заметный рост: %s мм/с' if ru else
                                  '  Notable increase: %s mm/s') % '; '.join(groups))
@@ -541,7 +542,8 @@ def plot(folder, names):
                     right = min(speeds[-1], MAX_FREQ / hz_per_speed)
                     if right > left:
                         ax.axvspan(left, right, color='orange', alpha=.15)
-                    ax.set_title('TD%d — %s' % (h, title), fontsize=10)
+                    ax.set_title(('Гармоника %d — %s' if ru else
+                                  'Harmonic %d — %s') % (h, title), fontsize=10)
                     ax.grid(True, alpha=.25)
                     ax.set_ylim(bottom=0)
                     if not any(np.isfinite(line.get_ydata()).any() for line in ax.lines):
@@ -591,7 +593,8 @@ def plot(folder, names):
                 bad_speeds = sorted({point['speed'] for point in item['growth']
                                      if point['td'] == h})
                 if bad_speeds:
-                    groups.append('TD%d: %s' % (h, ', '.join('%g' % v for v in bad_speeds)))
+                    groups.append(('Гармоника %d: %s' if ru else 'Harmonic %d: %s')
+                                  % (h, ', '.join('%g' % v for v in bad_speeds)))
             growth_lines = []
             if on is not None:
                 if groups:

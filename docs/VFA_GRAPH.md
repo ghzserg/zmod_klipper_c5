@@ -22,7 +22,7 @@ in steps of 10 mm/s, without exceeding the current velocity limit.
 The toolhead moves along 45° diagonals within the intersection of the
 0–255 mm area, kinematic limits and VFA range, with a 10 mm margin.
 The default `ADAPTIVE=1` adjusts the path length to provide 0.6 seconds
-of usable measurement time and at least 20 cycles of TD1, if the available
+of usable measurement time and at least 20 cycles of the first harmonic (TD1), if the available
 diagonal allows it. All paths share the same center.
 Use `ADAPTIVE=0` for full-length diagonals.
 Acceleration is limited to 5000 mm/s², the configured VFA acceleration
@@ -109,7 +109,7 @@ VFA_GRAPH T=2 AXIS=X MIN_SPEED=20 MAX_SPEED=150 STEP=10 REPEAT=1
 Движение по диагоналям 45° в пределах области 0–255 мм,
 границ кинематики и диапазона VFA, с отступом 10 мм от их пересечения.
 По умолчанию `ADAPTIVE=1`: длина рассчитывается для 0,6 с полезного
-измерения и не менее 20 периодов TD1, если позволяет доступная диагональ.
+измерения и не менее 20 периодов первой гармоники (TD1), если позволяет доступная диагональ.
 Центр траектории одинаков на всех скоростях. `ADAPTIVE=0` — полные диагонали.
 Ускорение не выше 5000 мм/с², настройки VFA и текущего лимита.
 На каждой скорости измеряются прямой и обратный проходы без холостого
