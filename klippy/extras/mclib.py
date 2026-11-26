@@ -56,6 +56,12 @@ class MCLIB:
                                    desc=self.cmd_MCLIB_SET_CURRENT_help)
 
         self.set_resonance_damp_cmd = None
+        self.configured_damping = {
+            1: (self.td1_amp, self.td1_phase1, self.td1_phase2),
+            2: (self.td2_amp, self.td2_phase1, self.td2_phase2),
+            4: (self.td4_amp, self.td4_phase1, self.td4_phase2),
+        }
+        self.current_damping = dict(self.configured_damping)
         if self.name != 'extruder':
             gcode.register_mux_command("MCLIB_SET_RESONANCE_DAMP", "STEPPER", self.name,
                                    self.cmd_MCLIB_SET_RESONANCE_DAMP,
@@ -123,16 +129,17 @@ class MCLIB:
         phase1 = int(gcmd.get_float('PHASE1', None)* 1000)
         phase2 = int(gcmd.get_float('PHASE2', None)* 1000)
 
+        self.set_resonance_damping(tdx, amp, phase1, phase2)
+
+    def set_resonance_damping(self, tdx, amp, phase1, phase2):
         if self.set_resonance_damp_cmd is None:
-            # Send setup message via mcu initialization
-            self.mcu.add_config_cmd("mclib_set_resonance_damp oid=%d td=1 amp=%u phase1=%u phase2=%u"
-                                    % (self.oid, self.td1_amp, self.td1_phase1, self.td1_phase2))
-            self.mcu.add_config_cmd("mclib_set_resonance_damp oid=%d td=2 amp=%u phase1=%u phase2=%u"
-                                    % (self.oid, self.td2_amp, self.td2_phase1, self.td2_phase2))
-            self.mcu.add_config_cmd("mclib_set_resonance_damp oid=%d td=4 amp=%u phase1=%u phase2=%u"
-                                    % (self.oid, self.td4_amp, self.td4_phase1, self.td4_phase2))
-            return
-        self.set_resonance_damp_cmd.send([self.oid, tdx, amp, phase1, phase2])
+            self.mcu.add_config_cmd(
+                "mclib_set_resonance_damp oid=%d tdx=%d amp=%u phase1=%u phase2=%u"
+                % (self.oid, tdx, amp, phase1, phase2))
+        else:
+            self.set_resonance_damp_cmd.send([self.oid, tdx, amp, phase1, phase2])
+        self.current_damping[tdx] = (amp, phase1, phase2)
+
 
 def load_config_prefix(config):
     return MCLIB(config)
