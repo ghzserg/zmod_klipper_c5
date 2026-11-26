@@ -1,5 +1,5 @@
 import numpy as np
-import logging, time
+import logging, time, os, json
 from functools import partial
 from copy import deepcopy
 #from scipy.signal import butter, filtfilt
@@ -1576,7 +1576,7 @@ class StepperResonanceTester:
             pending.append(('mclib ' + self.stepper, 'td%d_%s' % (tdx, name), value))
 
     def finish_harmonic(self, gcmd, tdx, directions, amp_by_dir,
-                        phase_by_dir, history_by_dir, pending):
+                        phase_by_dir, history_by_dir, pending, results=None):
         motor, previous = self.test_damping
         if len(directions) == 1:
             direction = directions[0]
@@ -1608,6 +1608,9 @@ class StepperResonanceTester:
                         vel = self.res_freq / 50 / tdx * self.rotation_dis / self.vel_ratio
                     residual[direction] = self._apply_comp_and_measure(
                         gcmd, vel, tdx, direction, amp, phases[idx])
+                if results is not None:
+                    results.append([tdx, direction, 6, amp, phases[idx],
+                                    residual[direction]])
                 gcmd.respond_info("td%d dir=%d: final residual %.1f, bare %.1f"
                                   % (tdx, direction, residual[direction], bare[direction]))
             # Не сохраняем явное ухудшение (20%) или отсутствие улучшения
@@ -1643,6 +1646,20 @@ class StepperResonanceTester:
         absolute = printer.lookup_object('gcode_move').get_status(now)['absolute_coordinates']
         motors = [printer.lookup_object('mclib stepper_' + axis) for axis in ('x', 'y')]
         previous = [dict(motor.current_damping) for motor in motors]
+        from . import vfa_graph
+        root = os.path.join(os.path.dirname(printer.get_start_args()['config_file']),
+                            'mod_data', 'vfa')
+        os.makedirs(root, exist_ok=True)
+        stamp = int(time.time())
+        while True:
+            folder = os.path.join(root, time.strftime(
+                '%Y%m%d_%H%M%S_setvfa', time.localtime(stamp)))
+            try:
+                os.mkdir(folder)
+                break
+            except FileExistsError:
+                stamp += 1
+        gcmd.respond_info("VFA calibration CSV: mod_data/vfa/" + os.path.basename(folder))
         pending = []
         selected = False
         try:
@@ -1670,10 +1687,10 @@ class StepperResonanceTester:
                             {'STEPPER': 'stepper_' + axis})
                         if alternative:
                             self.run_test(partial(vfa_alternative.calibrate, self,
-                                                  pending=pending), cmd)
+                                                  pending=pending, folder=folder), cmd)
                         else:
                             self.run_test(partial(self.cmd_STEPPER_RESONANCE_SEARCH_CALIBRATE,
-                                                  pending=pending), cmd)
+                                                  pending=pending, folder=folder), cmd)
                 finally:
                     if selected and not printer.is_shutdown():
                         status = toolhead.get_status(reactor.monotonic())
@@ -1702,10 +1719,28 @@ class StepperResonanceTester:
                             logging.exception("Failed to restore VFA damping")
             raise
 
+        # Диагностика выполняется после возврата инструмента и фиксации
+        # компенсации. Ошибка графиков не отменяет успешную калибровку.
+        try:
+            with open(os.path.join(folder, 'calibration.json'), 'w') as f:
+                json.dump({'tool': t, 'algorithm': 'alternative' if alternative
+                           else 'flashforge',
+                           'damping': {axis: motor.current_damping
+                                       for axis, motor in zip(('stepper_x', 'stepper_y'), motors)},
+                           'configured_frequency': {axis: self.td_config[axis]['freq']
+                                                    for axis in ('stepper_x', 'stepper_y')}},
+                          f, indent=2)
+            vfa_graph.render(self, gcmd, folder, ['stepper_x', 'stepper_y'],
+                             False, calibration=True)
+        except Exception:
+            logging.exception("VFA: calibration diagnostics failed")
+            gcmd.respond_info("VFA: graph generation failed; CSV: mod_data/vfa/"
+                              + os.path.basename(folder))
+
     cmd_STEPPER_RESONANCE_SEARCH_CALIBRATE_help = (
         "Search-based calibration: sweep phase then amplitude "
         "to find optimal resonance damping parameters")
-    def cmd_STEPPER_RESONANCE_SEARCH_CALIBRATE(self, gcmd, pending=None):
+    def cmd_STEPPER_RESONANCE_SEARCH_CALIBRATE(self, gcmd, pending=None, folder=None):
         """幅值-相位同时寻优搜索标定
 
         用法:
@@ -1771,12 +1806,15 @@ class StepperResonanceTester:
                     results.append([tdx, direction] + h)
 
             self.finish_harmonic(gcmd, tdx, directions, amp_by_dir,
-                                 phase_by_dir, history_by_dir, pending)
+                                 phase_by_dir, history_by_dir, pending,
+                                 results=results if folder else None)
 
         self.end_test(gcmd)
 
         filename = (CSV_DIR + "%s_search_calibrate-%s.csv"
                     % (self.stepper, time.strftime("%Y%m%d_%H%M%S")))
+        if folder:
+            filename = os.path.join(folder, "%s_search_calibrate.csv" % self.stepper)
         csv_header = ["tdx", "dir", "round", "amp", "phase", "residual"]
         self.save_to_csv(filename, results, header=csv_header,
                          format_spec='%.4f')

@@ -389,7 +389,7 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat, adaptive,
     return folder, names
 
 
-def render(tester, gcmd, folder, names, ru):
+def render(tester, gcmd, folder, names, ru, calibration=False):
     printer = tester.printer
     reactor = printer.get_reactor()
     # Не передаём пути и библиотеки Python заводской прошивки в chroot.
@@ -407,7 +407,8 @@ def render(tester, gcmd, folder, names, ru):
     try:
         proc = subprocess.Popen([
             '/bin/sh', '/usr/data/zmod/zmod/.shell/chroot.sh',
-            'python3', '/usr/data/zmod/klipper/klippy/extras/vfa_graph.py',
+            'python3', '/usr/data/zmod/klipper/klippy/extras/' +
+            ('vfa_calibration_plot.py' if calibration else 'vfa_graph.py'),
             plot_folder] + names, env=env, start_new_session=True)
     except OSError as exc:
         logging.exception("VFA: cannot start graph generation")
@@ -434,6 +435,9 @@ def render(tester, gcmd, folder, names, ru):
             except ProcessLookupError:
                 pass
             proc.wait()
+    if calibration:
+        gcmd.respond_info("VFA calibration graphs and CSV: " + location)
+        return
     try:
         with open(os.path.join(folder, 'summary.json'), encoding='utf-8') as f:
             summary = json.load(f)
