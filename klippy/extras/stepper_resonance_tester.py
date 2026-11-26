@@ -769,7 +769,7 @@ class StepperResonanceTester:
 
     def cmd_VFA_GRAPH(self, gcmd):
         from . import vfa_graph
-        vfa_graph.measure(self, gcmd, harmonic_extract_using_fft)
+        vfa_graph.measure(self, gcmd)
 
     # Test the relationship of resonance_amp and vel
     cmd_STEPPER_RESONANCE_CURVE_TEST_help = ("Test the resonance amp vs velocity for a stepper")

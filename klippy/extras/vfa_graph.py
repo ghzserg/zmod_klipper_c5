@@ -1,6 +1,7 @@
 # Диагностика VFA для Creator 5 / Creator 5 Pro.
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import csv
+import json
 import logging
 import math
 import os
@@ -10,8 +11,10 @@ import tempfile
 
 HARMONICS = (1, 2, 4)
 MOTORS = ('stepper_x', 'stepper_y')
-MAX_FREQ = 700.
+MAX_FREQ = 400.
 SETTLE = 0.05
+MIN_DURATION = 0.25
+MIN_CYCLES = 20
 
 
 def speeds_for(gcmd, max_velocity):
@@ -26,45 +29,65 @@ def speeds_for(gcmd, max_velocity):
         [high] if low + count * step < high - 1.e-6 else [])
 
 
-def spectrum(samples, start, end, vel, accel, distance, freqs, fft):
+def spectrum(samples, start, end, vel, accel, distance, freqs, angle,
+             nominal_rate):
     import numpy as np
     # Анализируем только равномерное движение, без разгона и торможения.
     ramp = vel / accel
     if abs(end - start - (distance / vel + ramp)) > 0.03:
         return None
     data = np.asarray(samples)
-    if data.ndim != 2 or len(data) < 128:
+    if data.ndim != 2 or data.shape[1] < 4 or len(data) < 128:
         return None
-    data = data[(data[:, 0] >= start + ramp + SETTLE)
-                & (data[:, 0] <= end - ramp - SETTLE)]
+    lo, hi = start + ramp + SETTLE, end - ramp - SETTLE
+    data = data[(data[:, 0] >= lo) & (data[:, 0] <= hi)]
     if len(data) < 128 or not np.isfinite(data).all():
         return None
     duration = data[-1, 0] - data[0, 0]
-    if duration <= 0. or np.any(np.diff(data[:, 0]) <= 0.):
+    dt = np.diff(data[:, 0])
+    if duration < MIN_DURATION or np.any(dt <= 0.):
         return None
     fs = (len(data) - 1) / duration
-    if np.max(np.diff(data[:, 0])) > 2.5 / fs:
+    if (abs(fs - nominal_rate) > .1 * nominal_rate
+            or np.max(dt) > 1.5 / fs
+            or data[0, 0] - lo > 2. / fs
+            or hi - data[-1, 0] > 2. / fs):
         return None
     usable = [i for i, f in enumerate(freqs)
-              if 8. <= f * duration and f <= min(MAX_FREQ, .43 * fs)]
-    result = [float('nan')] * len(freqs)
+              if MIN_CYCLES <= f * duration
+              and f <= min(MAX_FREQ, .43 * fs)]
+    result = [(float('nan'),) * 3 for _ in freqs]
     if usable:
-        wanted = [freqs[i] for i in usable]
-        x, _ = fft(data[:, 0], data[:, 1], wanted, fs)
-        y, _ = fft(data[:, 0], data[:, 2], wanted, fs)
-        for i, ax, ay in zip(usable, x, y):
-            result[i] = math.hypot(ax, ay)
-    return result
+        times = data[:, 0] - data[0, 0]
+        # Совместная аппроксимация гармоник на известных частотах.
+        columns = [np.ones(len(times)), times / duration - .5]
+        for i in usable:
+            phase = 2. * np.pi * freqs[i] * times
+            columns.extend((np.sin(phase), np.cos(phase)))
+        cos_a, sin_a = math.cos(angle), math.sin(angle)
+        x, y = data[:, 1], data[:, 2]
+        signals = np.column_stack((x * cos_a + y * sin_a,
+                                   -x * sin_a + y * cos_a))
+        design = np.column_stack(columns)
+        coeff, _, rank, _ = np.linalg.lstsq(design, signals, rcond=None)
+        if rank != design.shape[1] or not np.isfinite(coeff).all():
+            return None
+        for k, i in enumerate(usable):
+            along, across = np.hypot(coeff[2 + 2*k], coeff[3 + 2*k])
+            result[i] = (float(along), float(across), math.hypot(along, across))
+    return fs, duration, len(data), result
 
 
-def sample(tester, gcmd, toolhead, vel, accel, fft):
+def sample(tester, gcmd, toolhead, vel, accel, freqs):
     start_xy, end_xy = tester.move
-    distance = math.hypot(end_xy[0] - start_xy[0], end_xy[1] - start_xy[1])
-    if distance / vel - vel / accel <= 2. * SETTLE + .08:
-        return [float('nan')] * len(HARMONICS)
+    dx, dy = end_xy[0] - start_xy[0], end_xy[1] - start_xy[1]
+    distance = math.hypot(dx, dy)
+    angle = math.atan2(dy, dx)
+    missing = (float('nan'), float('nan'), 0,
+               [(float('nan'),) * 3 for _ in freqs])
+    if distance / vel - vel / accel < 2. * SETTLE + MIN_DURATION + .002:
+        return missing
     chip = tester.printer.lookup_object(tester.td_config[tester.stepper]['accel_chip'])
-    freqs = [vel / tester.rotation_dis * tester.vel_ratio * 50 * h
-             for h in HARMONICS]
     for _ in range(3):
         toolhead.manual_move(start_xy, min(150., vel))
         toolhead.wait_moves()
@@ -81,10 +104,11 @@ def sample(tester, gcmd, toolhead, vel, accel, fft):
             finally:
                 client.is_finished = True
         values = spectrum(client.get_samples(), start, end, vel, accel,
-                          distance, freqs, fft)
+                          distance, freqs, angle, chip.data_rate)
         if values is not None:
             return values
-    raise gcmd.error("VFA: no valid acceleration samples at %.1f mm/s" % vel)
+    gcmd.respond_info("VFA: invalid acceleration samples at %.1f mm/s" % vel)
+    return missing
 
 
 def apply_damping(motors, values):
@@ -106,7 +130,7 @@ def restore_damping(motors, values):
         raise errors[0]
 
 
-def measure(tester, gcmd, fft):
+def measure(tester, gcmd):
     printer = tester.printer
     reactor = printer.get_reactor()
     now = reactor.monotonic()
@@ -122,6 +146,7 @@ def measure(tester, gcmd, fft):
     if axis not in ('X', 'Y', 'XY'):
         raise gcmd.error("AXIS must be X, Y or XY")
     speeds = speeds_for(gcmd, status['max_velocity'])
+    repeat = gcmd.get_int('REPEAT', 3, minval=1, maxval=10)
     color = printer.lookup_object('zmod_color', None)
     if color is None or color._get_active_extruder(gcmd) == -2:
         raise gcmd.error("VFA: invalid tool sensor state")
@@ -141,7 +166,7 @@ def measure(tester, gcmd, fft):
         # _T_IN меняет ускорение; тест использует исходный лимит.
         toolhead.set_max_velocities(None, status['max_accel'], None,
                                     status['minimum_cruise_ratio'])
-        folder, names = measure_selected(tester, gcmd, fft, t, axis, speeds)
+        folder, names = measure_selected(tester, gcmd, t, axis, speeds, repeat)
     finally:
         try:
             if selected and not printer.is_shutdown():
@@ -156,7 +181,7 @@ def measure(tester, gcmd, fft):
     render(tester, gcmd, folder, names)
 
 
-def measure_selected(tester, gcmd, fft, t, axis, speeds):
+def measure_selected(tester, gcmd, t, axis, speeds, repeat):
     printer = tester.printer
     now = printer.get_reactor().monotonic()
     toolhead = printer.lookup_object('toolhead')
@@ -179,8 +204,12 @@ def measure_selected(tester, gcmd, fft, t, axis, speeds):
         raise gcmd.error("VFA: MCU is not ready")
     configured = {name: dict(m.configured_damping) for name, m in motors.items()}
     previous = {name: dict(m.current_damping) for name, m in motors.items()}
-    if not any(configured[name][h][0] for name in MOTORS for h in HARMONICS):
-        raise gcmd.error("No saved VFA compensation; calibrate VFA first")
+    disabled = {name: {h: (0, 0, 0) for h in HARMONICS} for name in MOTORS}
+    modes = {'before': disabled}
+    if any(configured[name][h][0] for name in MOTORS for h in HARMONICS):
+        modes['after'] = configured
+    else:
+        gcmd.respond_info("VFA: no saved compensation; measuring baseline only")
     names = [name for name in MOTORS if name[-1].upper() in axis]
     accel = min(tester.move_accel, status['max_accel'])
     tester.move_params = None
@@ -204,30 +233,53 @@ def measure_selected(tester, gcmd, fft, t, axis, speeds):
         folder = tempfile.mkdtemp(prefix='vfa_T%d_' % t, dir=root)
     except OSError as exc:
         raise gcmd.error("VFA: cannot create output directory: %s" % exc)
+    metadata = {'tool': t, 'repeat': repeat, 'accel': accel,
+                'speeds': speeds, 'max_frequency_hz': MAX_FREQ,
+                'min_duration_s': MIN_DURATION, 'min_cycles': MIN_CYCLES,
+                'settle_s': SETTLE, 'input_shaper': 'unchanged',
+                'damping_mcu_units': modes,
+                'previous_damping_mcu_units': previous,
+                'paths': {name: {direction: paths[name, direction][0]
+                                 for direction in (1, 0)}
+                          for name in names}}
+    with open(os.path.join(folder, 'metadata.json'), 'w') as f:
+        json.dump(metadata, f, indent=2)
     toolhead.wait_moves()
     try:
         toolhead.set_max_velocities(None, accel, None, 0.)
-        for label, values in (
-                ('before', {name: {h: (0, 0, 0) for h in HARMONICS}
-                            for name in MOTORS}),
-                ('after', configured)):
-            apply_damping(motors, values)
-            toolhead.dwell(.2)
-            toolhead.wait_moves()
-            for name in names:
-                tester.stepper = name
-                tester.rotation_dis = tester.td_config[name]['rotation_dis']
-                filename = os.path.join(folder, name + '_' + label + '.csv')
-                with open(filename, 'w') as f:
-                    writer = csv.writer(f)
-                    writer.writerow(['speed', 'direction', 'td1', 'td2', 'td4'])
-                    for direction in (1, 0):
-                        tester.move, tester.vel_ratio = paths[name, direction]
-                        for vel in speeds:
-                            gcmd.respond_info("VFA %s %s DIR=%d %.1f mm/s"
-                                              % (label, name, direction, vel))
-                            amps = sample(tester, gcmd, toolhead, vel, accel, fft)
-                            writer.writerow([vel, direction] + amps)
+        for name in names:
+            tester.stepper = name
+            tester.rotation_dis = tester.td_config[name]['rotation_dis']
+            filename = os.path.join(folder, name + '.csv')
+            with open(filename, 'w') as f:
+                writer = csv.writer(f)
+                writer.writerow(['speed', 'direction', 'repeat', 'mode', 'td',
+                                 'frequency_hz', 'sample_rate_hz', 'duration_s',
+                                 'samples', 'along_mm_s2', 'across_mm_s2',
+                                 'total_mm_s2'])
+                for direction in (1, 0):
+                    tester.move, tester.vel_ratio = paths[name, direction]
+                    for index, vel in enumerate(speeds):
+                        freqs = [vel / tester.rotation_dis * tester.vel_ratio * 50 * h
+                                 for h in HARMONICS]
+                        for trial in range(repeat):
+                            order = list(modes)
+                            if (index + trial + direction) % 2 == 0:
+                                order.reverse()
+                            for label in order:
+                                gcmd.respond_info(
+                                    "VFA %s %s DIR=%d %.1f mm/s %d/%d"
+                                    % (label, name, direction, vel, trial + 1, repeat))
+                                apply_damping(motors, modes[label])
+                                toolhead.dwell(.2)
+                                toolhead.wait_moves()
+                                fs, duration, count, amps = sample(
+                                    tester, gcmd, toolhead, vel, accel, freqs)
+                                for h, freq, values in zip(HARMONICS, freqs, amps):
+                                    writer.writerow([vel, direction, trial + 1, label,
+                                                     h, freq, fs, duration, count]
+                                                    + list(values))
+                            f.flush()
     finally:
         try:
             if not printer.is_shutdown():
@@ -279,27 +331,63 @@ def plot(folder, names):
     import matplotlib.pyplot as plt
     import numpy as np
     for name in names:
-        fig, axes = plt.subplots(3, 1, sharex=True, figsize=(9, 8))
-        for label, color in (('before', 'tab:red'), ('after', 'tab:green')):
-            data = np.atleast_1d(np.genfromtxt(
-                os.path.join(folder, name + '_' + label + '.csv'),
-                delimiter=',', names=True))
-            for direction, style in ((1, '-'), (0, '--')):
-                rows = data[data['direction'] == direction]
-                for h, ax in zip(HARMONICS, axes):
-                    ax.plot(rows['speed'], rows['td%d' % h], style,
-                            color=color, label='%s / DIR=%d' % (label, direction))
-        for h, ax in zip(HARMONICS, axes):
-            ax.set_ylabel('TD%d (mm/s²)' % h)
-            ax.grid(True, alpha=.25)
-            ax.set_ylim(bottom=0)
-        axes[0].legend(fontsize=8, ncol=2)
-        axes[-1].set_xlabel('Toolhead speed (mm/s)')
-        fig.suptitle('VFA — ' + name + ' / ' + os.path.basename(folder).split('_')[1]
-                     + ' (gaps: unmeasurable)')
-        fig.tight_layout()
-        fig.savefig(os.path.join(folder, name + '.png'), dpi=120)
-        plt.close(fig)
+        data = np.atleast_1d(np.genfromtxt(
+            os.path.join(folder, name + '.csv'), delimiter=',', names=True,
+            dtype=None, encoding='utf-8'))
+        modes = [('before', 'tab:red')]
+        if np.any(data['mode'] == 'after'):
+            modes.append(('after', 'tab:green'))
+        speeds = np.unique(data['speed'])
+        for suffix, displacement in (('', False), ('_displacement', True)):
+            fig, axes = plt.subplots(3, 3, sharex=True, figsize=(12, 9))
+            for h, row in zip(HARMONICS, axes):
+                for field, ax, title in zip(
+                        ('total_mm_s2', 'along_mm_s2', 'across_mm_s2'), row,
+                        ('XY magnitude', 'Along move', 'Across move')):
+                    for direction, style in ((1, '-'), (0, '--')):
+                        curves = {label: [] for label, _ in modes}
+                        for speed in speeds:
+                            subset = data[(data['td'] == h)
+                                          & (data['direction'] == direction)
+                                          & (data['speed'] == speed)]
+                            pairs = []
+                            for trial in np.unique(subset['repeat']):
+                                values = []
+                                for label, _ in modes:
+                                    rows = subset[(subset['repeat'] == trial)
+                                                  & (subset['mode'] == label)]
+                                    if len(rows) != 1:
+                                        break
+                                    value = rows[field][0]
+                                    if displacement:
+                                        value *= 1000. / (2. * np.pi
+                                                          * rows['frequency_hz'][0])**2
+                                    values.append(value)
+                                if len(values) == len(modes) and np.isfinite(values).all():
+                                    pairs.append(values)
+                            medians = (np.median(pairs, axis=0) if pairs
+                                       else [float('nan')] * len(modes))
+                            for (label, _), value in zip(modes, medians):
+                                curves[label].append(value)
+                        for label, color in modes:
+                            ax.plot(speeds, curves[label], style, color=color,
+                                    marker='.', markersize=3,
+                                    label='%s / DIR=%d' % (label, direction))
+                    ax.set_title('TD%d — %s' % (h, title), fontsize=10)
+                    ax.grid(True, alpha=.25)
+                    ax.set_ylim(bottom=0)
+                    if not any(np.isfinite(line.get_ydata()).any() for line in ax.lines):
+                        ax.text(.5, .5, 'No valid data', transform=ax.transAxes,
+                                ha='center', va='center', color='gray')
+                row[0].set_ylabel('µm (estimated)' if displacement else 'mm/s²')
+            axes[0, 0].legend(fontsize=7, ncol=2)
+            for ax in axes[-1]:
+                ax.set_xlabel('Toolhead speed (mm/s)')
+            fig.suptitle('VFA — ' + name + ' / ' + os.path.basename(folder).split('_')[1]
+                         + ' (median of matched valid repeats)')
+            fig.tight_layout()
+            fig.savefig(os.path.join(folder, name + suffix + '.png'), dpi=120)
+            plt.close(fig)
 
 
 if __name__ == '__main__':
