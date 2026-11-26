@@ -15,6 +15,8 @@ HARMONICS = (1, 2, 4)
 MOTORS = ('stepper_x', 'stepper_y')
 MAX_FREQ = 720.
 CAUTION_FREQ = 400.
+GROWTH_RATIO = .20
+GROWTH_UM = .05
 MAX_SPEED = 400.
 MAX_ACCEL = 5000.
 BED_MAX = 255.
@@ -434,9 +436,24 @@ def render(tester, gcmd, folder, names, ru):
             messages.append(("%s: %.3f → %.3f мкм (%d пар)." if ru else
                              "%s: %.3f → %.3f µm (%d pairs).") %
                             (motor, item['off_um'], item['on_um'], item['points']))
+            groups = []
+            for h in HARMONICS:
+                speeds = sorted({point['speed'] for point in item['growth']
+                                 if point['td'] == h})
+                if speeds:
+                    groups.append('TD%d: %s' % (h, ', '.join('%g' % v for v in speeds)))
+            if groups:
+                messages.append(('  Заметный рост: %s мм/с' if ru else
+                                 '  Notable increase: %s mm/s') % '; '.join(groups))
+            else:
+                messages.append('  Заметного роста не выявлено.' if ru else
+                                '  No notable increase found.')
     messages.insert(1, "Поперечное смещение датчика: медиана амплитуд до 400 Гц, без компенсации → с компенсацией."
                     if ru else
                     "Transverse sensor displacement: median amplitudes up to 400 Hz, OFF → ON.")
+    if any(summary[name]['on_um'] is not None for name in names):
+        messages.append("Заметный рост: ≥20% и ≥0,05 мкм, до 400 Гц." if ru else
+                        "Notable increase: ≥20% and ≥0.05 µm, up to 400 Hz.")
     messages.append(("Графики и CSV: Конфигурация → %s" if ru else
                      "Graphs and CSV: Configuration → %s") % location)
     gcmd.respond_info("\n".join(messages))
@@ -457,6 +474,7 @@ def plot(folder, names):
     summary = {}
     for name in names:
         summary_points = []
+        growth = []
         data = np.atleast_1d(np.genfromtxt(
             os.path.join(folder, name + '.csv'), delimiter=',', names=True,
             dtype=None, encoding='utf-8'))
@@ -472,6 +490,7 @@ def plot(folder, names):
                         titles):
                     for direction, style in ((1, '-'), (0, '--')):
                         curves = {label: [] for label, _ in modes}
+                        worse_x, worse_y = [], []
                         for speed in speeds:
                             subset = data[(data['td'] == h)
                                           & (data['direction'] == direction)
@@ -496,6 +515,14 @@ def plot(folder, names):
                             if (displacement and field == 'across_mm_s2' and pairs
                                     and subset['frequency_hz'][0] <= CAUTION_FREQ):
                                 summary_points.append(medians)
+                                if (len(modes) == 2 and medians[1] - medians[0] >= GROWTH_UM
+                                        and medians[1] >= medians[0] * (1. + GROWTH_RATIO)):
+                                    growth.append({'td': h, 'speed': float(speed),
+                                                   'direction': direction,
+                                                   'off_um': float(medians[0]),
+                                                   'on_um': float(medians[1])})
+                                    worse_x.append(speed)
+                                    worse_y.append(medians[1])
                             for (label, _), value in zip(modes, medians):
                                 curves[label].append(value)
                         for label, color in modes:
@@ -505,6 +532,8 @@ def plot(folder, names):
                                                         ('прямой' if direction else 'обратный')
                                                         if ru else
                                                         ('forward' if direction else 'reverse')))
+                        if worse_x:
+                            ax.plot(worse_x, worse_y, 'kx', markersize=6, zorder=5)
                     harmonic = data[data['td'] == h]
                     hz_per_speed = harmonic['frequency_hz'][0] / harmonic['speed'][0]
                     left = max(speeds[0], CAUTION_FREQ / hz_per_speed)
@@ -531,7 +560,8 @@ def plot(folder, names):
                 medians = np.median(summary_points, axis=0) if summary_points else []
                 summary[name] = {'points': len(summary_points),
                                  'off_um': float(medians[0]) if len(medians) else None,
-                                 'on_um': float(medians[1]) if len(medians) > 1 else None}
+                                 'on_um': float(medians[1]) if len(medians) > 1 else None,
+                                 'growth': growth}
             item = summary[name]
             off, on = item['off_um'], item['on_um']
             unit = 'мкм' if ru else 'µm'
@@ -555,6 +585,9 @@ def plot(folder, names):
                 result += '%.3f → %.3f %s' % (off, on, unit)
             basis = ('Медиана амплитуд поперечного смещения датчика до 400 Гц.' if ru else
                      'Median transverse sensor displacement amplitudes up to 400 Hz.')
+            if displacement and growth:
+                basis += (' Крестики — заметный рост (≥20% и ≥0,05 мкм).' if ru else
+                          ' Crosses: notable increase (≥20% and ≥0.05 µm).')
             fig.suptitle('VFA (Z-Mod) — %s / T%d — %s' %
                          (motor, metadata['tool'], quantity), y=.985, fontsize=13)
             handles, labels = axes[0, 0].get_legend_handles_labels()

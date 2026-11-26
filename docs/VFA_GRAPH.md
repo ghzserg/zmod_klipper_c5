@@ -49,6 +49,12 @@ up to 400 Hz for each motor.
 Only matched valid OFF/ON points are compared. If compensation is unavailable,
 the baseline value is reported. The summary is saved in `summary.json`.
 
+The console lists speeds with a notable increase in transverse displacement
+for each harmonic. Crosses on the displacement graph mark those points.
+Only matched valid points up to 400 Hz with an increase of at least 20%
+and 0.05 µm are flagged. These are heuristic thresholds, not sensor accuracy.
+The details are saved in `summary.json`.
+
 Gaps in the graphs indicate insufficient constant-speed measurement time
 (at least 0.25 seconds and 20 cycles of the harmonic), missing samples,
 or frequencies exceeding 720 Hz or 45% of the actual sampling rate.
@@ -120,7 +126,14 @@ VFA_GRAPH T=2 AXIS=X MIN_SPEED=20 MAX_SPEED=150 STEP=10 REPEAT=1
 путь к результатам (Конфигурация → mod_data/vfa/…) и краткое сравнение
 медиан амплитуды поперечного смещения датчика до 400 Гц для каждого двигателя.
 Сравниваются только совпадающие валидные точки OFF/ON; при отсутствии
-компенсации выводится исходное значение. Сводка сохраняется в `summary.json`. Пробелы на графиках
+компенсации выводится исходное значение. Сводка сохраняется в `summary.json`.
+
+В консоли выводятся скорости заметного роста поперечного смещения по гармоникам.
+Крестики на графике смещения отмечают эти точки. Учитываются только
+сопоставимые достоверные точки до 400 Гц с ростом не менее 20% и 0,05 мкм.
+Это пороги отбора, а не погрешность датчика. Подробности в `summary.json`.
+
+Пробелы на графиках
 означают недостаточную длительность равномерного движения (0,25 с и 20
 периодов гармоники), потерю отсчётов или частоту выше 720 Гц (также
 не выше 45% фактической частоты дискретизации). Оранжевая область на
