@@ -250,7 +250,7 @@ class StepperResonanceTester:
         self.test_limits = None
         self.shaper_state = []
         self.test_damping = None
-        self.alternative = config.getboolean('alternative', True)
+        self.alternative = config.getboolean('alternative', False)
         # Get the range of velocity, amp and phase for curve and mesh test
         self.move_accel = config.getfloat('move_accel', 5000.0, minval=2000.0, maxval=10000.0)
         self.vel_min, self.vel_max, self.vel_step = config.getfloatlist('vel_range', count=3)
