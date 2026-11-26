@@ -163,6 +163,15 @@ def measure(tester, gcmd):
     if color is None or color._get_active_extruder(gcmd) == -2:
         raise gcmd.error("VFA: invalid tool sensor state")
     absolute = printer.lookup_object('gcode_move').get_status(now)['absolute_coordinates']
+    lang = configparser.ConfigParser()
+    try:
+        lang.read(os.path.join(os.path.dirname(printer.get_start_args()['config_file']),
+                               'mod_data', 'lang.cfg'), encoding='utf-8')
+        ru = lang.get('zmod', 'language', fallback='en') == 'ru'
+    except (OSError, UnicodeError, configparser.Error):
+        ru = False
+    gcmd.respond_info("VFA (Z-Mod): начаты измерения. Ждите." if ru else
+                      "VFA (Z-Mod): measurements started. Please wait.")
     selected = False
     try:
         tester.gcode.run_script_from_command("G90\n_T_IN T=%d" % t)
@@ -179,7 +188,7 @@ def measure(tester, gcmd):
         toolhead.set_max_velocities(None, status['max_accel'], None,
                                     status['minimum_cruise_ratio'])
         folder, names = measure_selected(tester, gcmd, t, axis, speeds,
-                                         repeat, adaptive)
+                                         repeat, adaptive, ru)
     finally:
         try:
             if selected and not printer.is_shutdown():
@@ -191,10 +200,10 @@ def measure(tester, gcmd):
                                         status['minimum_cruise_ratio'])
             if not absolute and not printer.is_shutdown():
                 tester.gcode.run_script_from_command("G91")
-    render(tester, gcmd, folder, names)
+    render(tester, gcmd, folder, names, ru)
 
 
-def measure_selected(tester, gcmd, t, axis, speeds, repeat, adaptive):
+def measure_selected(tester, gcmd, t, axis, speeds, repeat, adaptive, ru):
     printer = tester.printer
     now = printer.get_reactor().monotonic()
     toolhead = printer.lookup_object('toolhead')
@@ -222,7 +231,8 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat, adaptive):
     if any(configured[name][h][0] for name in MOTORS for h in HARMONICS):
         modes['after'] = configured
     else:
-        gcmd.respond_info("VFA: no saved compensation; measuring baseline only")
+        gcmd.respond_info("VFA: компенсация не настроена, измеряем без неё." if ru else
+                          "VFA: no saved compensation; measuring baseline only.")
     names = [name for name in MOTORS if name[-1].upper() in axis]
     accel = min(MAX_ACCEL, tester.move_accel, status['max_accel'])
     if tester.kin != 'corexy':
@@ -270,13 +280,7 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat, adaptive):
                 folder = os.path.join(root, '%s_%02d' % (stamp, index))
     except OSError as exc:
         raise gcmd.error("VFA: cannot create output directory: %s" % exc)
-    lang = configparser.ConfigParser()
-    try:
-        lang.read(os.path.join(os.path.dirname(root), 'lang.cfg'), encoding='utf-8')
-        language = lang.get('zmod', 'language', fallback='en')
-    except (OSError, UnicodeError, configparser.Error):
-        language = 'en'
-    metadata = {'tool': t, 'language': 'ru' if language == 'ru' else 'en',
+    metadata = {'tool': t, 'language': 'ru' if ru else 'en',
                 'repeat': repeat, 'accel': accel,
                 'adaptive': bool(adaptive), 'target_duration_s': TARGET_DURATION,
                 'speeds': speeds, 'max_frequency_hz': MAX_FREQ,
@@ -342,7 +346,7 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat, adaptive):
     return folder, names
 
 
-def render(tester, gcmd, folder, names):
+def render(tester, gcmd, folder, names, ru):
     printer = tester.printer
     reactor = printer.get_reactor()
     # Не передаём пути и библиотеки Python заводской прошивки в chroot.
@@ -352,6 +356,11 @@ def render(tester, gcmd, folder, names):
     env['PATH'] = '/bin:/sbin:/usr/bin:/usr/sbin'
     plot_folder = os.path.join('/opt/config/mod_data/vfa',
                                os.path.basename(folder))
+    location = 'mod_data/vfa/' + os.path.basename(folder)
+    gcmd.respond_info(("VFA: измерения завершены. Начат расчёт графиков. Ждите.\n"
+                       "Результаты: Конфигурация → %s" if ru else
+                       "VFA: measurements finished. Calculating graphs. Please wait.\n"
+                       "Results: Configuration → %s") % location)
     try:
         proc = subprocess.Popen([
             '/bin/sh', '/usr/data/zmod/zmod/.shell/chroot.sh',
@@ -371,7 +380,33 @@ def render(tester, gcmd, folder, names):
         if proc.poll() is None:
             proc.kill()
             proc.wait()
-    gcmd.respond_info("VFA graphs and CSV: " + folder)
+    try:
+        with open(os.path.join(folder, 'summary.json'), encoding='utf-8') as f:
+            summary = json.load(f)
+    except (OSError, ValueError) as exc:
+        raise gcmd.error("VFA: summary unavailable; PNG and CSV: %s (%s)" % (folder, exc))
+    messages = ["VFA (Z-Mod): расчёт окончен." if ru else
+                "VFA (Z-Mod): calculation finished."]
+    for name in names:
+        item = summary[name]
+        motor = ('Двигатель ' if ru else 'Motor ') + name[-1].upper()
+        if not item['points']:
+            messages.append(motor + (": нет достоверных данных до 400 Гц." if ru else
+                                     ": no valid data up to 400 Hz."))
+        elif item['on_um'] is None:
+            messages.append(("%s: без компенсации %.3f мкм (%d точек)." if ru else
+                             "%s: without compensation %.3f µm (%d points).") %
+                            (motor, item['off_um'], item['points']))
+        else:
+            messages.append(("%s: %.3f → %.3f мкм (%d пар)." if ru else
+                             "%s: %.3f → %.3f µm (%d pairs).") %
+                            (motor, item['off_um'], item['on_um'], item['points']))
+    messages.insert(1, "Поперечное смещение датчика: медиана амплитуд до 400 Гц, OFF → ON."
+                    if ru else
+                    "Transverse sensor displacement: median amplitudes up to 400 Hz, OFF → ON.")
+    messages.append(("Графики и CSV: Конфигурация → %s" if ru else
+                     "Graphs and CSV: Configuration → %s") % location)
+    gcmd.respond_info("\n".join(messages))
 
 
 def plot(folder, names):
@@ -386,7 +421,9 @@ def plot(folder, names):
         'XY magnitude', 'Along move', 'Across move')
     mode_names = {'before': 'Выкл.' if ru else 'Off',
                   'after': 'Вкл.' if ru else 'On'}
+    summary = {}
     for name in names:
+        summary_points = []
         data = np.atleast_1d(np.genfromtxt(
             os.path.join(folder, name + '.csv'), delimiter=',', names=True,
             dtype=None, encoding='utf-8'))
@@ -423,6 +460,9 @@ def plot(folder, names):
                                     pairs.append(values)
                             medians = (np.median(pairs, axis=0) if pairs
                                        else [float('nan')] * len(modes))
+                            if (displacement and field == 'across_mm_s2' and pairs
+                                    and subset['frequency_hz'][0] <= CAUTION_FREQ):
+                                summary_points.append(medians)
                             for (label, _), value in zip(modes, medians):
                                 curves[label].append(value)
                         for label, color in modes:
@@ -462,6 +502,12 @@ def plot(folder, names):
             fig.tight_layout(rect=(0, 0, 1, .875))
             fig.savefig(os.path.join(folder, name + suffix + '.png'), dpi=120)
             plt.close(fig)
+        medians = np.median(summary_points, axis=0) if summary_points else []
+        summary[name] = {'points': len(summary_points),
+                         'off_um': float(medians[0]) if len(medians) else None,
+                         'on_um': float(medians[1]) if len(medians) > 1 else None}
+    with open(os.path.join(folder, 'summary.json'), 'w', encoding='utf-8') as f:
+        json.dump(summary, f, indent=2, allow_nan=False)
 
 
 if __name__ == '__main__':
