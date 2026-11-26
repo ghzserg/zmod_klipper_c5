@@ -194,6 +194,7 @@ def calibrate(tester, gcmd, pending, folder):
         # TD1 требует самой высокой скорости. Не выбираем частоту,
         # недоступную для калибровки всех трёх гармоник на данной машине.
         tester.update_move(tester.stepper, 1)
+        sweep_scale = 50 * tester.vel_ratio / tester.rotation_dis
         distance = np.hypot(tester.move[1][0] - tester.move[0][0],
                             tester.move[1][1] - tester.move[0][1])
         chip = tester.printer.lookup_object(
@@ -249,6 +250,7 @@ def calibrate(tester, gcmd, pending, folder):
         with open(os.path.join(folder, "%s_alternative.info" % tester.stepper), "w") as f:
             f.write("selected_freq=%.3f\nconfigured_freq=%.3f\n" %
                     (freq, configured))
+            f.write("sweep_hz_per_mm_s=%.17g\n" % sweep_scale)
             for trial, score in zip(trials, scores):
                 f.write("candidate=%.3f score=%.6f\n" % (trial[0], score))
     finally:

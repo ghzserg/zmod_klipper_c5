@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 HARMONICS = (1, 2, 4)
+MAX_PLOT_FREQ = 400.
 
 
 def plot(folder, names):
@@ -20,6 +21,14 @@ def plot(folder, names):
         files = sorted(glob.glob(os.path.join(folder, name + '_alternative-*Hz.csv')))
         files += sorted(glob.glob(os.path.join(folder, name + '_search_calibrate.csv')))
         for path in files:
+            # При подборе параметров все гармоники измеряются на одной
+            # частоте, но на разных скоростях.
+            filename = os.path.basename(path)
+            freq = (float(filename[len(name + '_alternative-'):-6])
+                    if filename.endswith('Hz.csv')
+                    else float(meta['configured_frequency'][name]))
+            if freq > MAX_PLOT_FREQ:
+                continue
             data = np.atleast_1d(np.genfromtxt(path, delimiter=',', names=True))
             fig, axes = plt.subplots(3, 3, figsize=(12, 9))
             for td, row in zip(HARMONICS, axes):
@@ -74,23 +83,39 @@ def plot(folder, names):
         sweep = os.path.join(folder, name + '_sweep.csv')
         if not os.path.isfile(sweep):
             continue
-        fig, axes = plt.subplots(3, 1, sharex=True, figsize=(10, 9))
+        # Коэффициент записан при измерении, а не задан константой:
+        # он зависит от кинематики, направления и rotation_distance.
+        with open(os.path.join(folder, name + '_alternative.info'),
+                  encoding='utf-8') as f:
+            scale = next((float(line.split('=', 1)[1]) for line in f
+                          if line.startswith('sweep_hz_per_mm_s=')), None)
+        if scale is None or not np.isfinite(scale) or scale <= 0.:
+            print('VFA: missing sweep frequency scale for ' + name, file=sys.stderr)
+            continue
+        fig, axes = plt.subplots(3, 1, figsize=(10, 9))
         checks = sorted(glob.glob(os.path.join(folder, name + '_check-*.csv')))
         before = np.atleast_1d(np.genfromtxt(sweep, delimiter=',', names=True))
         for td, ax in zip(HARMONICS, axes):
             field = 'td%d_amp' % td
-            ax.plot(before['vel'], before[field], 'k.-', label='Bare / forward')
+            points = before[before['vel'] * scale * td <= MAX_PLOT_FREQ]
+            ax.plot(points['vel'], points[field], 'k.-', label='Bare / forward')
             for path in checks:
                 data = np.atleast_1d(np.genfromtxt(path, delimiter=',', names=True))
                 label = os.path.basename(path)[len(name) + 7:-4]
-                ax.plot(data['vel'], data[field],
+                points = data[data['vel'] * scale * td <= MAX_PLOT_FREQ]
+                ax.plot(points['vel'], points[field],
                         '--' if label.endswith('dir0') else '-', label=label)
-            ax.set_title('TD%d' % td)
+            ax.set_title('TD%d — up to 400 Hz' % td)
+            ax.set_xlabel('Toolhead speed, mm/s')
             ax.set_ylabel('Acceleration, mm/s²')
             ax.set_ylim(bottom=0)
             ax.grid(alpha=.25)
-            ax.legend(fontsize=8)
-        axes[-1].set_xlabel('Toolhead speed, mm/s')
+            if any(np.isfinite(line.get_ydata()).any() for line in ax.lines):
+                ax.legend(fontsize=8)
+            else:
+                ax.set_xticks([])
+                ax.text(.5, .5, 'No valid data up to 400 Hz',
+                        transform=ax.transAxes, ha='center', va='center')
         fig.suptitle('Z-Mod VFA / T%d / %s / resonance sweep' %
                      (meta['tool'], name))
         fig.tight_layout(rect=(0, 0, 1, .95))
