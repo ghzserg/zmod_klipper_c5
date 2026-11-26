@@ -174,6 +174,7 @@ def measure(tester, gcmd):
     speeds = speeds_for(gcmd, status['max_velocity'], ru)
     repeat = gcmd.get_int('REPEAT', 1, minval=1, maxval=10)
     adaptive = gcmd.get_int('ADAPTIVE', 1, minval=0, maxval=1)
+    shaper = gcmd.get_int('SHAPER', 0, minval=0, maxval=1)
     color = printer.lookup_object('zmod_color', None)
     if color is None or color._get_active_extruder(gcmd) == -2:
         raise gcmd.error("VFA: неверное состояние датчиков инструмента" if ru else
@@ -197,8 +198,27 @@ def measure(tester, gcmd):
         # _T_IN меняет ускорение; тест использует исходный лимит.
         toolhead.set_max_velocities(None, status['max_accel'], None,
                                     status['minimum_cruise_ratio'])
-        folder, names = measure_selected(tester, gcmd, t, axis, speeds,
-                                         repeat, adaptive, ru)
+        input_shaper = printer.lookup_object('input_shaper', None)
+        shaper_state = []
+        shaper_mode = 'unchanged' if shaper else 'unavailable'
+        if not shaper and input_shaper is not None:
+            # Сохраняем также ранее отключённые шейперы.
+            shaper_state = [(axis_shaper, axis_shaper.get_shaper(),
+                             axis_shaper.saved)
+                            for axis_shaper in input_shaper.get_shapers()]
+            shaper_mode = 'disabled'
+        try:
+            if shaper_state:
+                input_shaper.disable_shaping()
+            folder, names = measure_selected(tester, gcmd, t, axis, speeds,
+                                             repeat, adaptive, shaper_mode, ru)
+        finally:
+            if shaper_state:
+                for axis_shaper, values, saved in shaper_state:
+                    axis_shaper.n, axis_shaper.A, axis_shaper.T = values
+                    axis_shaper.saved = saved
+                if not printer.is_shutdown():
+                    input_shaper._update_input_shaping()
     finally:
         try:
             if selected and not printer.is_shutdown():
@@ -213,7 +233,8 @@ def measure(tester, gcmd):
     render(tester, gcmd, folder, names, ru)
 
 
-def measure_selected(tester, gcmd, t, axis, speeds, repeat, adaptive, ru):
+def measure_selected(tester, gcmd, t, axis, speeds, repeat, adaptive,
+                     shaper_mode, ru):
     printer = tester.printer
     now = printer.get_reactor().monotonic()
     toolhead = printer.lookup_object('toolhead')
@@ -303,7 +324,7 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat, adaptive, ru):
                 'speeds': speeds, 'max_frequency_hz': MAX_FREQ,
                 'caution_frequency_hz': CAUTION_FREQ, 'margin_mm': MARGIN,
                 'min_duration_s': MIN_DURATION, 'min_cycles': MIN_CYCLES,
-                'settle_s': SETTLE, 'input_shaper': 'unchanged',
+                'settle_s': SETTLE, 'input_shaper': shaper_mode,
                 'damping_mcu_units': modes,
                 'previous_damping_mcu_units': previous,
                 'paths_by_speed': paths}

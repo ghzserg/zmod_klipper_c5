@@ -81,7 +81,11 @@ and harmonic.
 
 The test does not save configuration changes and restores the compensation
 settings and motion limits that were active before the test.
-Input Shaper is unchanged: only constant-speed motion is analyzed.
+By default (`SHAPER=0`), Input Shaper is temporarily disabled for the measurements.
+Use `SHAPER=1` to keep the current shaper state for comparison.
+The previous state is restored before returning the tool, also on measurement errors
+(unless the MCU is shut down). The mode is recorded in `metadata.json`.
+Only constant-speed motion is analyzed.
 If the MCU shuts down, settings can only be restored after restarting
 and loading the saved configuration.
 
@@ -165,8 +169,12 @@ PNG показывают ускорение и оценку амплитуды �
 поверхности детали. Сравнивайте один инструмент, направление и гармонику.
 
 Тест не сохраняет конфигурацию и восстанавливает действовавшие до запуска
-параметры компенсации и ограничения движения. Input Shaper не изменяется:
-измеряется участок равномерного движения. При аварийном отключении MCU
+параметры компенсации и ограничения движения.
+По умолчанию (`SHAPER=0`) Input Shaper временно отключается на время измерений.
+Для сравнения с текущим состоянием шейперов используйте `SHAPER=1`.
+Исходное состояние восстанавливается до возврата инструмента, в том числе
+при ошибке измерений. Режим записывается в `metadata.json`.
+Измеряется участок равномерного движения. При аварийном отключении MCU
 восстановление возможно только при перезапуске и чтении сохранённой конфигурации.
 
 Для генерации PNG используется отдельный процесс Python 3 с Matplotlib
