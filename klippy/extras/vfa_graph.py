@@ -1,5 +1,6 @@
 # Диагностика VFA для Creator 5 / Creator 5 Pro.
 # This file may be distributed under the terms of the GNU GPLv3 license.
+import configparser
 import csv
 import json
 import logging
@@ -7,7 +8,7 @@ import math
 import os
 import subprocess
 import sys
-import tempfile
+import time
 
 HARMONICS = (1, 2, 4)
 MOTORS = ('stepper_x', 'stepper_y')
@@ -257,10 +258,26 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat, adaptive):
                         'mod_data', 'vfa')
     try:
         os.makedirs(root, exist_ok=True)
-        folder = tempfile.mkdtemp(prefix='vfa_T%d_' % t, dir=root)
+        stamp = time.strftime('%Y%m%d_%H%M')
+        folder = os.path.join(root, stamp)
+        index = 0
+        while True:
+            try:
+                os.mkdir(folder)
+                break
+            except FileExistsError:
+                index += 1
+                folder = os.path.join(root, '%s_%02d' % (stamp, index))
     except OSError as exc:
         raise gcmd.error("VFA: cannot create output directory: %s" % exc)
-    metadata = {'tool': t, 'repeat': repeat, 'accel': accel,
+    lang = configparser.ConfigParser()
+    try:
+        lang.read(os.path.join(os.path.dirname(root), 'lang.cfg'), encoding='utf-8')
+        language = lang.get('zmod', 'language', fallback='en')
+    except (OSError, UnicodeError, configparser.Error):
+        language = 'en'
+    metadata = {'tool': t, 'language': 'ru' if language == 'ru' else 'en',
+                'repeat': repeat, 'accel': accel,
                 'adaptive': bool(adaptive), 'target_duration_s': TARGET_DURATION,
                 'speeds': speeds, 'max_frequency_hz': MAX_FREQ,
                 'caution_frequency_hz': CAUTION_FREQ, 'margin_mm': MARGIN,
@@ -362,6 +379,13 @@ def plot(folder, names):
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     import numpy as np
+    with open(os.path.join(folder, 'metadata.json'), encoding='utf-8') as f:
+        metadata = json.load(f)
+    ru = metadata.get('language') == 'ru'
+    titles = ('Суммарная XY', 'Вдоль движения', 'Поперёк движения') if ru else (
+        'XY magnitude', 'Along move', 'Across move')
+    mode_names = {'before': 'Выкл.' if ru else 'Off',
+                  'after': 'Вкл.' if ru else 'On'}
     for name in names:
         data = np.atleast_1d(np.genfromtxt(
             os.path.join(folder, name + '.csv'), delimiter=',', names=True,
@@ -375,7 +399,7 @@ def plot(folder, names):
             for h, row in zip(HARMONICS, axes):
                 for field, ax, title in zip(
                         ('total_mm_s2', 'along_mm_s2', 'across_mm_s2'), row,
-                        ('XY magnitude', 'Along move', 'Across move')):
+                        titles):
                     for direction, style in ((1, '-'), (0, '--')):
                         curves = {label: [] for label, _ in modes}
                         for speed in speeds:
@@ -404,7 +428,10 @@ def plot(folder, names):
                         for label, color in modes:
                             ax.plot(speeds, curves[label], style, color=color,
                                     marker='.', markersize=3,
-                                    label='%s / DIR=%d' % (label, direction))
+                                    label='%s / %s' % (mode_names[label],
+                                                        ('прямой' if direction else 'обратный')
+                                                        if ru else
+                                                        ('forward' if direction else 'reverse')))
                     harmonic = data[data['td'] == h]
                     hz_per_speed = harmonic['frequency_hz'][0] / harmonic['speed'][0]
                     left = max(speeds[0], CAUTION_FREQ / hz_per_speed)
@@ -415,15 +442,24 @@ def plot(folder, names):
                     ax.grid(True, alpha=.25)
                     ax.set_ylim(bottom=0)
                     if not any(np.isfinite(line.get_ydata()).any() for line in ax.lines):
-                        ax.text(.5, .5, 'No valid data', transform=ax.transAxes,
+                        ax.text(.5, .5, 'Нет данных' if ru else 'No valid data',
+                                transform=ax.transAxes,
                                 ha='center', va='center', color='gray')
-                row[0].set_ylabel('µm (estimated)' if displacement else 'mm/s²')
-            axes[0, 0].legend(fontsize=7, ncol=2)
+                row[0].set_ylabel(('мкм (оценка)' if displacement else 'мм/с²')
+                                  if ru else ('µm (estimated)' if displacement else 'mm/s²'))
             for ax in axes[-1]:
-                ax.set_xlabel('Toolhead speed (mm/s)')
-            fig.suptitle('VFA — ' + name + ' / ' + os.path.basename(folder).split('_')[1]
-                         + '\nMedian of matched repeats; orange: >400 Hz, attenuated amplitudes')
-            fig.tight_layout()
+                ax.set_xlabel('Скорость каретки, мм/с' if ru else 'Toolhead speed, mm/s')
+            motor = ('Двигатель ' if ru else 'Motor ') + name[-1].upper()
+            quantity = ('Смещение (оценка)' if displacement else 'Ускорение') if ru else (
+                'Displacement (estimated)' if displacement else 'Acceleration')
+            note = ('Оранжевый фон: выше 400 Гц, амплитуды могут быть занижены'
+                    if ru else 'Orange: above 400 Hz, amplitudes may be attenuated')
+            fig.suptitle('VFA — %s / T%d — %s\n%s' %
+                         (motor, metadata['tool'], quantity, note), fontsize=13)
+            handles, labels = axes[0, 0].get_legend_handles_labels()
+            fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(.5, .925),
+                       ncol=4, fontsize=9, frameon=False)
+            fig.tight_layout(rect=(0, 0, 1, .875))
             fig.savefig(os.path.join(folder, name + suffix + '.png'), dpi=120)
             plt.close(fig)
 
