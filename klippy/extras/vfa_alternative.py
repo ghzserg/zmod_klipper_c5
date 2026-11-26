@@ -2,7 +2,7 @@
 # Алгоритм адаптирован из OpenCreator (Kalico, 7da732e09d4e213b7766482b6cfdf7e75ee9e191).
 # Этот файл распространяется на условиях GNU GPLv3.
 import math
-import time
+import os
 import numpy as np
 
 SWEEP_SPACING = 0.08
@@ -93,7 +93,7 @@ def measure_sweep(tester, gcmd, speeds, rows):
                                           for t, a in zip(tester.tdx, rows[vel]))))
 
 
-def find_resonances(tester, gcmd, speeds):
+def find_resonances(tester, gcmd, speeds, folder):
     tester.update_move(tester.stepper, 1)
     rows = {}
     measure_sweep(tester, gcmd, speeds, rows)
@@ -107,14 +107,14 @@ def find_resonances(tester, gcmd, speeds):
         measure_sweep(tester, gcmd, np.linspace(lo, hi, 9), rows)
     seen = sorted(v for v in rows if np.isfinite(rows[v][mi]))
     strong = strong_resonances(seen, [rows[v][mi] for v in seen], regions)
-    tester.save_to_csv("/tmp/vfa_%s_alternative_sweep.csv" % tester.stepper,
+    tester.save_to_csv(os.path.join(folder, "%s_sweep.csv" % tester.stepper),
                        [[v] + rows[v] for v in sorted(rows)],
                        header=["vel"] + ["td%d_amp" % t for t in tester.tdx])
     return [v / tester.rotation_dis * tester.vel_ratio * 50 * tester.main_tdx
             for v, _ in strong]
 
 
-def tune(tester, gcmd, freq):
+def tune(tester, gcmd, freq, folder):
     motor, _ = tester.test_damping
     tester.res_freq = freq
     for tdx in tester.tdx:
@@ -154,24 +154,28 @@ def tune(tester, gcmd, freq):
                           "bare=%s, final=%s" %
                           (tdx, amp, amps[0], amps[1], bare, residual))
         tester.apply_calibration(tdx, amp, phases[0], phases[1], pending)
-    tester.save_to_csv("/tmp/%s_alternative-%s.csv" %
-                       (tester.stepper, (time.strftime("%Y%m%d_%H%M%S") + "-%.1fHz" % freq)),
+    tester.save_to_csv(os.path.join(folder, "%s_alternative-%.3fHz.csv" %
+                                    (tester.stepper, freq)),
                        history, header=["tdx", "dir", "round", "amp", "phase", "residual"],
                        format_spec='%.4f')
     return pending, dict(motor.current_damping)
 
 
-def check_sweep(tester, gcmd, speeds):
+def check_sweep(tester, gcmd, speeds, folder, freq):
     result = []
     for direction in (1, 0):
         tester.update_move(tester.stepper, direction)
         rows = {}
         measure_sweep(tester, gcmd, speeds, rows)
         result.extend(rows[v] for v in sorted(rows))
+        tester.save_to_csv(os.path.join(folder, "%s_check-%.3fHz-dir%d.csv" %
+                                        (tester.stepper, freq, direction)),
+                           [[v] + rows[v] for v in sorted(rows)],
+                           header=["vel"] + ["td%d_amp" % t for t in tester.tdx])
     return np.asarray(result)
 
 
-def calibrate(tester, gcmd, pending):
+def calibrate(tester, gcmd, pending, folder):
     tester.prepare_test(gcmd)
     motor, _ = tester.test_damping
     configured = tester.res_freq
@@ -185,7 +189,7 @@ def calibrate(tester, gcmd, pending):
         speeds = sweep_speeds(20., vmax)
         for tdx in tester.tdx:
             motor.set_resonance_damping(tdx, 0, 0, 0)
-        freqs = find_resonances(tester, gcmd, speeds)
+        freqs = find_resonances(tester, gcmd, speeds, folder)
         # При отсутствии выраженного пика остаётся заводская частота.
         # TD1 требует самой высокой скорости. Не выбираем частоту,
         # недоступную для калибровки всех трёх гармоник на данной машине.
@@ -217,9 +221,11 @@ def calibrate(tester, gcmd, pending):
                           (tester.stepper, ", ".join("%.1f" % f for f in freqs)))
         trials = []
         for freq in freqs:
-            values, damping = tune(tester, gcmd, freq)
-            sweep = check_sweep(tester, gcmd, speeds) if len(freqs) > 1 else None
+            values, damping = tune(tester, gcmd, freq, folder)
+            sweep = (check_sweep(tester, gcmd, speeds, folder, freq)
+                     if len(freqs) > 1 else None)
             trials.append((freq, values, damping, sweep))
+        scores = []
         if len(trials) > 1:
             # Сравниваем кандидатов по одинаковым измеряемым точкам.
             mask = np.logical_and.reduce([np.isfinite(t[3]) for t in trials])
@@ -240,9 +246,11 @@ def calibrate(tester, gcmd, pending):
                           (tester.stepper, freq))
         # Частота остаётся диагностической: старый алгоритм использует
         # исходную конфигурацию, а SAVE_CONFIG не конфликтует с include.
-        with open("/tmp/vfa_%s_alternative.info" % tester.stepper, "w") as f:
+        with open(os.path.join(folder, "%s_alternative.info" % tester.stepper), "w") as f:
             f.write("selected_freq=%.3f\nconfigured_freq=%.3f\n" %
                     (freq, configured))
+            for trial, score in zip(trials, scores):
+                f.write("candidate=%.3f score=%.6f\n" % (trial[0], score))
     finally:
         tester.res_freq = configured
         tester.end_test(gcmd)
