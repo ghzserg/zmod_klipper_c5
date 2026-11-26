@@ -1245,7 +1245,7 @@ class StepperResonanceTester:
         总测量次数: 1 + 4 + 5 + n_amp + 3 + 1（默认 19 次移动）
         其中仅 1~2 次处于"坏相位"（Round 1），且使用小幅值
 
-        返回: (optimal_amp, optimal_phase, history)
+        返回: (optimal_amp, optimal_phase, history, amp_fit)
           history: list of [round, amp, phase, residual] 每次测量记录
         """
         # 设置移动参数
@@ -1309,59 +1309,24 @@ class StepperResonanceTester:
                     "  phase=%sdeg  residual=%.1f"
                     % (quad_labels[i], R_quad[i]))
 
-            if alternative:
-                # 检查是否过补偿：所有残余都大于裸扰动
-                if np.min(R_quad) <= A_bare * 0.8:
-                    break
-                # Every phase made it worse: the test strength is too big for this
-                # ripple. Probe again weaker, unless this was the last try or it
-                # can't get any weaker; then carry on with these readings (the
-                # later rounds still find the best amplitude)
-                if retry == max_retries - 1:
-                    gcmd.respond_info(
-                        "  Every phase still above the bare vibration (min=%.1f, "
-                        "bare=%.1f) after %d probes; continuing with these readings"
-                        % (np.min(R_quad), A_bare, max_retries))
-                    break
-                # 用最大残余与 A_bare 的比值估算缩放因子
-                # R_max ≈ |D| + |GA_t|, A_bare ≈ |D|
-                # 目标: |GA_t_new| ≈ |D|/5 → trial_amp_new ≈ trial_amp * A_bare / (5*(R_max - A_bare))
-                R_max = np.max(R_quad)
-                scale = A_bare / (5.0 * max(R_max - A_bare, A_bare * 0.1))
-                scale = min(scale, 0.5)  # 确保缩小，不能放大
-                trial_amp_new = max(trial_amp * scale, 0.002)
-                if trial_amp_new > trial_amp * 0.95:
-                    gcmd.respond_info(
-                        "  Every phase above the bare vibration (min=%.1f, bare=%.1f), "
-                        "but the test strength is already the smallest (%.4f); "
-                        "continuing with these readings"
-                        % (np.min(R_quad), A_bare, trial_amp))
-                    break
-                gcmd.respond_info(
-                    "  Every phase above the bare vibration (min=%.1f > %.1f): test "
-                    "strength too big, probing again at %.4f (was %.4f)"
-                    % (np.min(R_quad), A_bare, trial_amp_new, trial_amp))
-                trial_amp = trial_amp_new
-            else:
-                # 检查是否过补偿：所有残余都大于裸扰动
-                if np.min(R_quad) > A_bare * 0.8:
-                    # 用最大残余与 A_bare 的比值估算缩放因子
-                    # R_max ≈ |D| + |GA_t|, A_bare ≈ |D|
-                    # 目标: |GA_t_new| ≈ |D|/5 → trial_amp_new ≈ trial_amp * A_bare / (5*(R_max - A_bare))
-                    R_max = np.max(R_quad)
-                    scale = A_bare / (5.0 * max(R_max - A_bare, A_bare * 0.1))
-                    scale = min(scale, 0.5)  # 确保缩小，不能放大
-                    trial_amp_new = trial_amp * scale
-                    trial_amp_new = max(trial_amp_new, 0.005) # 不要过度缩小，保持足够信噪比
-                    gcmd.respond_info(
-                        "  WARNING: All residuals > A_bare (min=%.1f > "
-                        "%.1f), trial_amp too large. "
-                        "Reducing %.4f -> %.4f"
-                        % (np.min(R_quad), A_bare,
-                           trial_amp, trial_amp_new))
-                    trial_amp = trial_amp_new
-                else:
-                    break
+            if np.min(R_quad) <= A_bare * 0.8:
+                break
+            # В альтернативном режиме не меняем амплитуду после последнего
+            # измерения и допускаем более слабую пробу (OpenCreator).
+            if alternative and retry == max_retries - 1:
+                break
+            R_max = np.max(R_quad)
+            scale = A_bare / (5.0 * max(R_max - A_bare, A_bare * 0.1))
+            scale = min(scale, 0.5)
+            trial_amp_new = max(trial_amp * scale,
+                                0.002 if alternative else 0.005)
+            if alternative and trial_amp_new > trial_amp * 0.95:
+                break
+            gcmd.respond_info(
+                "  WARNING: All residuals > A_bare (min=%.1f > "
+                "%.1f), trial_amp too large. Reducing %.4f -> %.4f"
+                % (np.min(R_quad), A_bare, trial_amp, trial_amp_new))
+            trial_amp = trial_amp_new
 
         best_phase_r1, amp_est, R0_sq, R1, phase_check_err = \
             self._quadrature_estimate(quad_phases, R_quad, trial_amp)

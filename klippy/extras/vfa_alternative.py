@@ -155,7 +155,7 @@ def tune(tester, gcmd, freq):
                           (tdx, amp, amps[0], amps[1], bare, residual))
         tester.apply_calibration(tdx, amp, phases[0], phases[1], pending)
     tester.save_to_csv("/tmp/%s_alternative-%s.csv" %
-                       (tester.stepper, time.strftime("%Y%m%d_%H%M%S")),
+                       (tester.stepper, (time.strftime("%Y%m%d_%H%M%S") + "-%.1fHz" % freq)),
                        history, header=["tdx", "dir", "round", "amp", "phase", "residual"],
                        format_spec='%.4f')
     return pending, dict(motor.current_damping)
@@ -187,7 +187,32 @@ def calibrate(tester, gcmd, pending):
             motor.set_resonance_damping(tdx, 0, 0, 0)
         freqs = find_resonances(tester, gcmd, speeds)
         # При отсутствии выраженного пика остаётся заводская частота.
-        freqs = freqs or [configured]
+        # TD1 требует самой высокой скорости. Не выбираем частоту,
+        # недоступную для калибровки всех трёх гармоник на данной машине.
+        tester.update_move(tester.stepper, 1)
+        distance = np.hypot(tester.move[1][0] - tester.move[0][0],
+                            tester.move[1][1] - tester.move[0][1])
+        chip = tester.printer.lookup_object(
+            tester.td_config[tester.stepper]['accel_chip'])
+        usable = []
+        for freq in freqs + [configured]:
+            if not 0. < freq < min(700., .45 * chip.data_rate):
+                continue
+            valid = True
+            for tdx in tester.tdx:
+                vel = freq / 50 / tdx * tester.rotation_dis / tester.vel_ratio
+                duration = distance / vel - vel / toolhead.max_accel - .1
+                if (vel > toolhead.max_velocity
+                        or duration < max(20. / freq, 130. / chip.data_rate)):
+                    valid = False
+                    break
+            if valid:
+                usable.append(freq)
+        freqs = [f for f in freqs if f in usable]
+        if not freqs:
+            if configured not in usable:
+                raise gcmd.error("No measurable VFA calibration frequency")
+            freqs = [configured]
         gcmd.respond_info("%s: alternative frequencies %s Hz" %
                           (tester.stepper, ", ".join("%.1f" % f for f in freqs)))
         trials = []
