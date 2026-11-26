@@ -631,6 +631,22 @@ class StepperResonanceTester:
                                  diag_finish, diag_end - diag_finish)
             finally:
                 aclient.is_finished = True
+        # Дожидаемся удаления клиента и завершения остановки датчика.
+        # Иначе следующий быстрый ход может совпасть с обработкой старого пакета.
+        bulk = chip.batch_bulk
+        diag_start = reactor.monotonic()
+        deadline = diag_start + 5.
+        while (aclient.handle_batch in bulk.client_cbs
+               or (bulk.is_started and bulk.batch_timer is None)):
+            now = reactor.monotonic()
+            if self.printer.is_shutdown() or now >= deadline:
+                raise self.printer.command_error(
+                    "Accelerometer measurement did not stop")
+            reactor.pause(min(now + .010, deadline))
+        diag_end = reactor.monotonic()
+        if diag_end - diag_start >= .050:
+            logging.info("VFA_DIAG accel stop start=%.6f wall=%.6f clients=%d",
+                         diag_start, diag_end - diag_start, len(bulk.client_cbs))
         diag_start = reactor.monotonic()
         samples = aclient.get_samples()
         diag_end = reactor.monotonic()
@@ -700,7 +716,13 @@ class StepperResonanceTester:
 
     def calculate_resonance_amps(self, samples, freqs, move_angle, axis,
                                  t_start, t_end, vel):
+        reactor = self.printer.get_reactor()
+        diag_start = reactor.monotonic()
         data = np.asarray(samples)
+        diag_end = reactor.monotonic()
+        if diag_end - diag_start >= .050:
+            logging.info("VFA_DIAG numpy asarray start=%.6f duration=%.6f count=%d",
+                         diag_start, diag_end - diag_start, len(data))
         if data.ndim != 2 or data.shape[1] < 4 or len(data) < 128:
             return None
         toolhead = self.printer.lookup_object('toolhead')
@@ -736,8 +758,10 @@ class StepperResonanceTester:
         measured_freqs = [freqs[i] for i in usable]
         accel_x, accel_y = data[:, 1], data[:, 2]
         angle_rad = np.radians(move_angle)
-        reactor = self.printer.get_reactor()
         diag_start = reactor.monotonic()
+        if diag_start - diag_end >= .050:
+            logging.info("VFA_DIAG numpy prepare start=%.6f duration=%.6f count=%d",
+                         diag_end, diag_start - diag_end, len(t))
         if axis == 'A':
             ax, _ = harmonic_extract_using_fft(t, accel_x, measured_freqs, fs)
             ay, _ = harmonic_extract_using_fft(t, accel_y, measured_freqs, fs)
