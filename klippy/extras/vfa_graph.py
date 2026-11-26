@@ -431,7 +431,7 @@ def plot(folder, names):
         if np.any(data['mode'] == 'after'):
             modes.append(('after', 'tab:green'))
         speeds = np.unique(data['speed'])
-        for suffix, displacement in (('', False), ('_displacement', True)):
+        for suffix, displacement in (('_displacement', True), ('', False)):
             fig, axes = plt.subplots(3, 3, sharex=True, figsize=(12, 9))
             for h, row in zip(HARMONICS, axes):
                 for field, ax, title in zip(
@@ -494,18 +494,45 @@ def plot(folder, names):
                 'Displacement (estimated)' if displacement else 'Acceleration')
             note = ('Оранжевый фон: выше 400 Гц, амплитуды могут быть занижены'
                     if ru else 'Orange: above 400 Hz, amplitudes may be attenuated')
-            fig.suptitle('VFA (Z-Mod) — %s / T%d — %s\n%s' %
-                         (motor, metadata['tool'], quantity, note), fontsize=13)
+            if displacement:
+                medians = np.median(summary_points, axis=0) if summary_points else []
+                summary[name] = {'points': len(summary_points),
+                                 'off_um': float(medians[0]) if len(medians) else None,
+                                 'on_um': float(medians[1]) if len(medians) > 1 else None}
+            item = summary[name]
+            off, on = item['off_um'], item['on_um']
+            unit = 'мкм' if ru else 'µm'
+            if off is None:
+                result = 'Нет достоверных данных до 400 Гц.' if ru else (
+                    'No valid data up to 400 Hz.')
+            elif on is None:
+                result = ('Без компенсации: %.3f %s. Сравнение недоступно.' if ru else
+                          'Without compensation: %.3f %s. Comparison unavailable.') % (off, unit)
+            else:
+                result = ('Поперечные вибрации: ' if ru else 'Transverse vibration: ')
+                if off > 0.:
+                    change = 100. * (on - off) / off
+                    if change < 0.:
+                        result += ('снижение на %.1f%%' if ru else 'reduced by %.1f%%') % -change
+                    elif change > 0.:
+                        result += ('рост на %.1f%%' if ru else 'increased by %.1f%%') % change
+                    else:
+                        result += 'без изменений' if ru else 'unchanged'
+                    result += ' — '
+                result += '%.3f → %.3f %s' % (off, on, unit)
+            basis = ('Медиана амплитуд поперечного смещения датчика до 400 Гц.' if ru else
+                     'Median transverse sensor displacement amplitudes up to 400 Hz.')
+            fig.suptitle('VFA (Z-Mod) — %s / T%d — %s' %
+                         (motor, metadata['tool'], quantity), y=.985, fontsize=13)
             handles, labels = axes[0, 0].get_legend_handles_labels()
-            fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(.5, .925),
+            fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(.5, .955),
                        ncol=4, fontsize=9, frameon=False)
-            fig.tight_layout(rect=(0, 0, 1, .875))
+            fig.text(.5, .052, result, ha='center', fontsize=11, weight='bold')
+            fig.text(.5, .032, basis, ha='center', fontsize=9)
+            fig.text(.5, .014, note, ha='center', fontsize=9)
+            fig.tight_layout(rect=(0, .07, 1, .915))
             fig.savefig(os.path.join(folder, name + suffix + '.png'), dpi=120)
             plt.close(fig)
-        medians = np.median(summary_points, axis=0) if summary_points else []
-        summary[name] = {'points': len(summary_points),
-                         'off_um': float(medians[0]) if len(medians) else None,
-                         'on_um': float(medians[1]) if len(medians) > 1 else None}
     with open(os.path.join(folder, 'summary.json'), 'w', encoding='utf-8') as f:
         json.dump(summary, f, indent=2, allow_nan=False)
 
