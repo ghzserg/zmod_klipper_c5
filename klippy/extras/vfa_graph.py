@@ -12,7 +12,7 @@ import time
 
 HARMONICS = (1, 2, 4)
 MOTORS = ('stepper_x', 'stepper_y')
-MAX_FREQ = 700.
+MAX_FREQ = 720.
 CAUTION_FREQ = 400.
 MAX_SPEED = 400.
 MAX_ACCEL = 5000.
