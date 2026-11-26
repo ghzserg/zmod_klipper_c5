@@ -485,8 +485,11 @@ def plot(folder, names):
             modes.append(('after', 'tab:green'))
         speeds = np.unique(data['speed'])
         for suffix, displacement in (('_displacement', True), ('', False)):
-            fig, axes = plt.subplots(3, 3, sharex=True, figsize=(12, 9))
+            fig, axes = plt.subplots(3, 3, sharex='row', figsize=(12, 9))
             for h, row in zip(HARMONICS, axes):
+                valid_speeds = set()
+                harmonic = data[data['td'] == h]
+                hz_per_speed = harmonic['frequency_hz'][0] / harmonic['speed'][0]
                 for field, ax, title in zip(
                         ('total_mm_s2', 'along_mm_s2', 'across_mm_s2'), row,
                         titles):
@@ -514,6 +517,8 @@ def plot(folder, names):
                                     pairs.append(values)
                             medians = (np.median(pairs, axis=0) if pairs
                                        else [float('nan')] * len(modes))
+                            if pairs:
+                                valid_speeds.add(speed)
                             if (displacement and field == 'across_mm_s2' and pairs
                                     and subset['frequency_hz'][0] <= CAUTION_FREQ):
                                 summary_points.append(medians)
@@ -536,8 +541,6 @@ def plot(folder, names):
                                                         ('forward' if direction else 'reverse')))
                         if worse_x:
                             ax.plot(worse_x, worse_y, 'kx', markersize=6, zorder=5)
-                    harmonic = data[data['td'] == h]
-                    hz_per_speed = harmonic['frequency_hz'][0] / harmonic['speed'][0]
                     left = max(speeds[0], CAUTION_FREQ / hz_per_speed)
                     right = min(speeds[-1], MAX_FREQ / hz_per_speed)
                     if right > left:
@@ -552,8 +555,19 @@ def plot(folder, names):
                                 ha='center', va='center', color='gray')
                 row[0].set_ylabel(('мкм (оценка)' if displacement else 'мм/с²')
                                   if ru else ('µm (estimated)' if displacement else 'mm/s²'))
-            for ax in axes[-1]:
-                ax.set_xlabel('Скорость каретки, мм/с' if ru else 'Toolhead speed, mm/s')
+                limits = (sorted(valid_speeds)
+                          or speeds[speeds * hz_per_speed <= MAX_FREQ].tolist()
+                          or speeds.tolist())
+                lo, hi = limits[0], limits[-1]
+                pad = max(.03 * (hi - lo), 1.)
+                row[0].set_xlim(lo - pad, hi + pad)
+                ticks = [lo] + [v for v in row[0].get_xticks()
+                                if lo + .1 * (hi - lo) < v < hi - .1 * (hi - lo)]
+                if hi > lo:
+                    ticks.append(hi)
+                row[0].set_xticks(ticks)
+                for ax in row:
+                    ax.set_xlabel('Скорость каретки, мм/с' if ru else 'Toolhead speed, mm/s')
             motor = ('Двигатель ' if ru else 'Motor ') + name[-1].upper()
             quantity = ('Смещение (оценка)' if displacement else 'Ускорение') if ru else (
                 'Displacement (estimated)' if displacement else 'Acceleration')
