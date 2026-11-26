@@ -467,8 +467,8 @@ def plot(folder, names):
     with open(os.path.join(folder, 'metadata.json'), encoding='utf-8') as f:
         metadata = json.load(f)
     ru = metadata.get('language') == 'ru'
-    titles = ('Суммарная XY', 'Вдоль движения', 'Поперёк движения') if ru else (
-        'XY magnitude', 'Along move', 'Across move')
+    titles = ('Суммарные колебания XY', 'Продольные колебания', 'Поперечные колебания') if ru else (
+        'Total XY vibration', 'Longitudinal vibration', 'Transverse vibration')
     mode_names = {'before': 'Выкл.' if ru else 'Off',
                   'after': 'Вкл.' if ru else 'On'}
     summary = {}

@@ -66,6 +66,10 @@ The CSV files contain each repeat, harmonic frequency, validity indicator,
 measurement duration, sampling rate, and longitudinal, transverse and total
 acceleration. The `metadata.json` file records compensation settings in MCU
 units and measurement conditions.
+Longitudinal vibration is parallel to toolhead motion; transverse vibration
+is perpendicular to the trajectory in the XY plane. Total XY vibration is
+the combined magnitude of both components.
+
 The PNG files show acceleration and estimated sensor displacement amplitude
 in µm, calculated as A/(2πf)². This is not a direct measurement of nozzle
 displacement or print surface quality. Compare the same tool, direction
@@ -143,6 +147,10 @@ CSV хранит каждый повтор, частоту гармоники, �
 длительность и частоту дискретизации, продольное, поперечное и суммарное
 ускорение. В `metadata.json` — параметры компенсации в единицах MCU
 и условия измерений.
+Продольные колебания направлены вдоль траектории каретки, поперечные —
+перпендикулярно ей в плоскости XY. Суммарные колебания XY объединяют
+амплитуды обеих составляющих.
+
 PNG показывают ускорение и оценку амплитуды смещения датчика в мкм
 по формуле A/(2πf)². Это не прямое измерение смещения сопла или качества
 поверхности детали. Сравнивайте один инструмент, направление и гармонику.
