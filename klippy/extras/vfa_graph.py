@@ -19,6 +19,7 @@ BED_MAX = 255.
 MARGIN = 10.
 SETTLE = 0.05
 MIN_DURATION = 0.25
+TARGET_DURATION = 0.6
 MIN_CYCLES = 20
 
 
@@ -155,7 +156,8 @@ def measure(tester, gcmd):
     if axis not in ('X', 'Y', 'XY'):
         raise gcmd.error("AXIS must be X, Y or XY")
     speeds = speeds_for(gcmd, status['max_velocity'])
-    repeat = gcmd.get_int('REPEAT', 3, minval=1, maxval=10)
+    repeat = gcmd.get_int('REPEAT', 1, minval=1, maxval=10)
+    adaptive = gcmd.get_int('ADAPTIVE', 1, minval=0, maxval=1)
     color = printer.lookup_object('zmod_color', None)
     if color is None or color._get_active_extruder(gcmd) == -2:
         raise gcmd.error("VFA: invalid tool sensor state")
@@ -175,7 +177,8 @@ def measure(tester, gcmd):
         # _T_IN меняет ускорение; тест использует исходный лимит.
         toolhead.set_max_velocities(None, status['max_accel'], None,
                                     status['minimum_cruise_ratio'])
-        folder, names = measure_selected(tester, gcmd, t, axis, speeds, repeat)
+        folder, names = measure_selected(tester, gcmd, t, axis, speeds,
+                                         repeat, adaptive)
     finally:
         try:
             if selected and not printer.is_shutdown():
@@ -190,7 +193,7 @@ def measure(tester, gcmd):
     render(tester, gcmd, folder, names)
 
 
-def measure_selected(tester, gcmd, t, axis, speeds, repeat):
+def measure_selected(tester, gcmd, t, axis, speeds, repeat, adaptive):
     printer = tester.printer
     now = printer.get_reactor().monotonic()
     toolhead = printer.lookup_object('toolhead')
@@ -232,14 +235,24 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat):
         raise gcmd.error("VFA: no safe diagonal inside configured limits")
     # Равные проекции диагонали нужны для движения одного мотора CoreXY.
     cx, cy = (x_min + x_max) / 2., (y_min + y_max) / 2.
-    x0, x1 = cx - side / 2., cx + side / 2.
-    y0, y1 = cy - side / 2., cy + side / 2.
+    ratio = math.sqrt(2.)
     paths = {}
     for name in names:
-        start, end = ((x0, y0), (x1, y1)) if name == 'stepper_x' else (
-            (x0, y1), (x1, y0))
-        paths[name, 1] = ((start, end), math.sqrt(2.))
-        paths[name, 0] = ((end, start), math.sqrt(2.))
+        rotation = tester.td_config[name]['rotation_dis']
+        paths[name] = {}
+        for vel in speeds:
+            length = side * ratio
+            if adaptive:
+                freq = vel / rotation * ratio * 50
+                duration = max(TARGET_DURATION, MIN_CYCLES / freq)
+                # Запас 5 мс учитывает отсечение крайних отсчётов.
+                length = min(length, vel * (duration + 2. * SETTLE + .005)
+                             + vel * vel / accel)
+            half = min(side / 2., length / (2. * ratio))
+            x0, x1 = cx - half, cx + half
+            y0, y1 = cy - half, cy + half
+            paths[name][vel] = ((x0, y0), (x1, y1)) if name == 'stepper_x' else (
+                (x0, y1), (x1, y0))
     root = os.path.join(os.path.dirname(printer.get_start_args()['config_file']),
                         'mod_data', 'vfa')
     try:
@@ -248,15 +261,14 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat):
     except OSError as exc:
         raise gcmd.error("VFA: cannot create output directory: %s" % exc)
     metadata = {'tool': t, 'repeat': repeat, 'accel': accel,
+                'adaptive': bool(adaptive), 'target_duration_s': TARGET_DURATION,
                 'speeds': speeds, 'max_frequency_hz': MAX_FREQ,
                 'caution_frequency_hz': CAUTION_FREQ, 'margin_mm': MARGIN,
                 'min_duration_s': MIN_DURATION, 'min_cycles': MIN_CYCLES,
                 'settle_s': SETTLE, 'input_shaper': 'unchanged',
                 'damping_mcu_units': modes,
                 'previous_damping_mcu_units': previous,
-                'paths': {name: {direction: paths[name, direction][0]
-                                 for direction in (1, 0)}
-                          for name in names}}
+                'paths_by_speed': paths}
     with open(os.path.join(folder, 'metadata.json'), 'w') as f:
         json.dump(metadata, f, indent=2)
     toolhead.wait_moves()
@@ -274,7 +286,8 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat):
                                  'samples', 'along_mm_s2', 'across_mm_s2',
                                  'total_mm_s2'])
                 for index, vel in enumerate(speeds):
-                    freqs = [vel / tester.rotation_dis * paths[name, 1][1] * 50 * h
+                    path = paths[name][vel]
+                    freqs = [vel / tester.rotation_dis * ratio * 50 * h
                              for h in HARMONICS]
                     for trial in range(repeat):
                         order = list(modes)
@@ -283,7 +296,7 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat):
                         for label in order:
                             apply_damping(motors, modes[label])
                             for direction in (1, 0):
-                                tester.move, tester.vel_ratio = paths[name, direction]
+                                tester.move = path if direction == 1 else path[::-1]
                                 gcmd.respond_info(
                                     "VFA %s %s DIR=%d %.1f mm/s %d/%d"
                                     % (label, name, direction, vel, trial + 1, repeat))
