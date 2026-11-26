@@ -6,6 +6,7 @@ import json
 import logging
 import math
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -22,6 +23,7 @@ SETTLE = 0.05
 MIN_DURATION = 0.25
 TARGET_DURATION = 0.6
 MIN_CYCLES = 20
+PLOT_TIMEOUT = 600.
 
 
 def speeds_for(gcmd, max_velocity, ru):
@@ -383,24 +385,31 @@ def render(tester, gcmd, folder, names, ru):
         proc = subprocess.Popen([
             '/bin/sh', '/usr/data/zmod/zmod/.shell/chroot.sh',
             'python3', '/usr/data/zmod/klipper/klippy/extras/vfa_graph.py',
-            plot_folder] + names, env=env)
+            plot_folder] + names, env=env, start_new_session=True)
     except OSError as exc:
         logging.exception("VFA: cannot start graph generation")
         raise gcmd.error(("VFA: не удалось построить графики. CSV: %s" if ru else
                           "VFA: plot failed. CSV: %s") % location)
-    deadline = reactor.monotonic() + 120.
+    deadline = reactor.monotonic() + PLOT_TIMEOUT
     try:
         while proc.poll() is None:
-            if printer.is_shutdown() or reactor.monotonic() >= deadline:
-                raise gcmd.error(("VFA: построение графиков прервано. CSV: " if ru else
-                                  "VFA: graph generation interrupted. CSV: ") + location)
+            if printer.is_shutdown():
+                raise gcmd.error(("VFA: Klipper аварийно остановлен. CSV: " if ru else
+                                  "VFA: Klipper shut down. CSV: ") + location)
+            if reactor.monotonic() >= deadline:
+                raise gcmd.error(("VFA: превышено время построения графиков (10 мин). CSV: "
+                                  if ru else
+                                  "VFA: graph generation timed out (10 min). CSV: ") + location)
             reactor.pause(reactor.monotonic() + .1)
         if proc.returncode:
             raise gcmd.error(("VFA: не удалось построить графики. CSV: " if ru else
                               "VFA: plot failed. CSV: ") + location)
     finally:
         if proc.poll() is None:
-            proc.kill()
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
             proc.wait()
     try:
         with open(os.path.join(folder, 'summary.json'), encoding='utf-8') as f:
