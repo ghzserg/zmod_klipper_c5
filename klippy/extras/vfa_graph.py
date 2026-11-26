@@ -96,7 +96,9 @@ def sample(tester, gcmd, toolhead, vel, accel, freqs):
     if not any(f <= min(MAX_FREQ, .45 * chip.data_rate) for f in freqs):
         return missing
     for _ in range(3):
-        toolhead.manual_move(start_xy, min(150., vel))
+        pos = toolhead.get_position()
+        if math.hypot(pos[0] - start_xy[0], pos[1] - start_xy[1]) > 1.e-6:
+            toolhead.manual_move(start_xy, min(150., vel))
         toolhead.wait_moves()
         client = chip.start_internal_client()
         try:
@@ -271,20 +273,20 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat):
                                  'sample_rate_hz', 'duration_s',
                                  'samples', 'along_mm_s2', 'across_mm_s2',
                                  'total_mm_s2'])
-                for direction in (1, 0):
-                    tester.move, tester.vel_ratio = paths[name, direction]
-                    for index, vel in enumerate(speeds):
-                        freqs = [vel / tester.rotation_dis * tester.vel_ratio * 50 * h
-                                 for h in HARMONICS]
-                        for trial in range(repeat):
-                            order = list(modes)
-                            if (index + trial + direction) % 2 == 0:
-                                order.reverse()
-                            for label in order:
+                for index, vel in enumerate(speeds):
+                    freqs = [vel / tester.rotation_dis * paths[name, 1][1] * 50 * h
+                             for h in HARMONICS]
+                    for trial in range(repeat):
+                        order = list(modes)
+                        if (index + trial) % 2:
+                            order.reverse()
+                        for label in order:
+                            apply_damping(motors, modes[label])
+                            for direction in (1, 0):
+                                tester.move, tester.vel_ratio = paths[name, direction]
                                 gcmd.respond_info(
                                     "VFA %s %s DIR=%d %.1f mm/s %d/%d"
                                     % (label, name, direction, vel, trial + 1, repeat))
-                                apply_damping(motors, modes[label])
                                 toolhead.dwell(.2)
                                 toolhead.wait_moves()
                                 fs, duration, count, amps = sample(
@@ -296,7 +298,7 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat):
                                     writer.writerow([vel, direction, trial + 1, label,
                                                      h, freq, band, fs, duration, count]
                                                     + list(values))
-                            f.flush()
+                                f.flush()
     finally:
         try:
             if not printer.is_shutdown():
