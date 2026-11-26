@@ -460,6 +460,7 @@ def render(tester, gcmd, folder, names, ru):
 
 
 def plot(folder, names):
+    import textwrap
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
@@ -585,18 +586,36 @@ def plot(folder, names):
                 result += '%.3f → %.3f %s' % (off, on, unit)
             basis = ('Медиана амплитуд поперечного смещения датчика до 400 Гц.' if ru else
                      'Median transverse sensor displacement amplitudes up to 400 Hz.')
-            if displacement and growth:
-                basis += (' Крестики — заметный рост (≥20% и ≥0,05 мкм).' if ru else
-                          ' Crosses: notable increase (≥20% and ≥0.05 µm).')
+            groups = []
+            for h in HARMONICS:
+                bad_speeds = sorted({point['speed'] for point in item['growth']
+                                     if point['td'] == h})
+                if bad_speeds:
+                    groups.append('TD%d: %s' % (h, ', '.join('%g' % v for v in bad_speeds)))
+            growth_lines = []
+            if on is not None:
+                if groups:
+                    growth_text = ('Рост ≥20% и ≥0,05 мкм: %s мм/с' if ru else
+                                   'Increase ≥20% and ≥0.05 µm: %s mm/s') % '; '.join(groups)
+                else:
+                    growth_text = ('Заметного роста не выявлено (≥20% и ≥0,05 мкм).' if ru else
+                                   'No notable increase found (≥20% and ≥0.05 µm).')
+                growth_lines = textwrap.wrap(growth_text, width=110)
+            if displacement and groups:
+                basis += (' Крестики — точки роста.' if ru else
+                          ' Crosses mark increases.')
+            extra = .019 * len(growth_lines)
             fig.suptitle('VFA (Z-Mod) — %s / T%d — %s' %
                          (motor, metadata['tool'], quantity), y=.985, fontsize=13)
             handles, labels = axes[0, 0].get_legend_handles_labels()
             fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(.5, .955),
                        ncol=4, fontsize=9, frameon=False)
-            fig.text(.5, .052, result, ha='center', fontsize=11, weight='bold')
+            fig.text(.5, .052 + extra, result, ha='center', fontsize=11, weight='bold')
+            for i, line in enumerate(reversed(growth_lines)):
+                fig.text(.5, .052 + .019 * i, line, ha='center', fontsize=10)
             fig.text(.5, .032, basis, ha='center', fontsize=9)
             fig.text(.5, .014, note, ha='center', fontsize=9)
-            fig.tight_layout(rect=(0, .07, 1, .915))
+            fig.tight_layout(rect=(0, .07 + extra, 1, .915))
             fig.savefig(os.path.join(folder, name + suffix + '.png'), dpi=120)
             plt.close(fig)
     with open(os.path.join(folder, 'summary.json'), 'w', encoding='utf-8') as f:
