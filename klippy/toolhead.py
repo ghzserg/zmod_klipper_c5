@@ -335,12 +335,14 @@ class ToolHead:
     # Print time and flush tracking
     def _advance_flush_time(self, flush_time):
         flush_time = max(flush_time, self.last_flush_time)
+        diag_start = self.reactor.monotonic()
         # Generate steps via itersolve
         sg_flush_want = min(flush_time + STEPCOMPRESS_FLUSH_TIME,
                             self.print_time - self.kin_flush_delay)
         sg_flush_time = max(sg_flush_want, flush_time)
         for sg in self.step_generators:
             sg(sg_flush_time)
+        diag_generated = self.reactor.monotonic()
         self.min_restart_time = max(self.min_restart_time, sg_flush_time)
         # Free trapq entries that are no longer needed
         clear_history_time = self.clear_history_time
@@ -350,9 +352,18 @@ class ToolHead:
         self.trapq_finalize_moves(self.trapq, free_time, clear_history_time)
         self.extruder.update_move_time(free_time, clear_history_time)
         # Flush stepcompress and mcu steppersync
+        diag_sync = self.reactor.monotonic()
         for m in self.all_mcus:
             m.flush_moves(flush_time, clear_history_time)
         self.last_flush_time = flush_time
+        diag_end = self.reactor.monotonic()
+        if diag_end - diag_start >= .050:
+            logging.info("VFA_DIAG toolhead flush start=%.6f target=%.6f "
+                         "generate=%.6f finalize=%.6f sync=%.6f "
+                         "print_time=%.6f estimated=%.6f",
+                         diag_start, flush_time, diag_generated - diag_start,
+                         diag_sync - diag_generated, diag_end - diag_sync,
+                         self.print_time, self._get_estimated_print_time(diag_end))
     def _advance_move_time(self, next_print_time):
         pt_delay = self.kin_flush_delay + STEPCOMPRESS_FLUSH_TIME
         flush_time = max(self.last_flush_time, self.print_time - pt_delay)
@@ -468,6 +479,12 @@ class ToolHead:
         return self.reactor.NEVER
     def _flush_handler(self, eventtime):
         try:
+            diag_now = self.reactor.monotonic()
+            if diag_now - eventtime >= .050:
+                logging.info("VFA_DIAG toolhead flush_handler event=%.6f now=%.6f "
+                             "last_flush=%.6f print_time=%.6f state=%s",
+                             eventtime, diag_now, self.last_flush_time,
+                             self.print_time, self.special_queuing_state)
             est_print_time = self._get_estimated_print_time(eventtime)
             if not self.special_queuing_state:
                 # In "main" state - flush lookahead if buffer runs low

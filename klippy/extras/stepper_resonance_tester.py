@@ -587,8 +587,21 @@ class StepperResonanceTester:
         if not np.isfinite(move_speed) or not 0. < move_speed <= toolhead.max_velocity:
             raise self.printer.command_error("Invalid resonance test velocity")
         # Движение в машинных координатах, без влияния G91, G92 и M220.
+        reactor = self.printer.get_reactor()
+        diag_start = reactor.monotonic()
         toolhead.manual_move([start_x, start_y], BACK_VELOCITY)
+        diag_queued = reactor.monotonic()
         toolhead.wait_moves()
+        diag_end = reactor.monotonic()
+        # Ожидание самого движения штатное; отмечаем только задержку
+        # постановки в очередь или возврата после расчётного конца.
+        diag_late = toolhead._get_estimated_print_time(diag_end) - toolhead.print_time
+        if diag_queued - diag_start >= .050 or diag_late >= .200:
+            logging.info("VFA_DIAG return_move stepper=%s speed=%.3f "
+                         "start=%.6f queue=%.6f wait=%.6f end_late=%.6f",
+                         self.stepper, move_speed, diag_start,
+                         diag_queued - diag_start, diag_end - diag_queued,
+                         diag_late)
 
         # Start accelerometer measurement
         chip_name = self.td_config[self.stepper]['accel_chip']
@@ -608,10 +621,20 @@ class StepperResonanceTester:
             toolhead.wait_moves()
         finally:
             try:
+                diag_finish = reactor.monotonic()
                 aclient.finish_measurements()
+                diag_end = reactor.monotonic()
+                if diag_end - diag_finish >= .050:
+                    logging.info("VFA_DIAG accel finish start=%.6f wall=%.6f",
+                                 diag_finish, diag_end - diag_finish)
             finally:
                 aclient.is_finished = True
+        diag_start = reactor.monotonic()
         samples = aclient.get_samples()
+        diag_end = reactor.monotonic()
+        if diag_end - diag_start >= .050:
+            logging.info("VFA_DIAG accel samples start=%.6f duration=%.6f count=%d",
+                         diag_start, diag_end - diag_start, len(samples))
         logging.info("do_move_and_accel_measure: t_move_start=%.6f "
                      "t_move_end=%.6f move_duration=%.6f samples=%d "
                      "t_sample_first=%.6f t_sample_last=%.6f"
@@ -711,6 +734,8 @@ class StepperResonanceTester:
         measured_freqs = [freqs[i] for i in usable]
         accel_x, accel_y = data[:, 1], data[:, 2]
         angle_rad = np.radians(move_angle)
+        reactor = self.printer.get_reactor()
+        diag_start = reactor.monotonic()
         if axis == 'A':
             ax, _ = harmonic_extract_using_fft(t, accel_x, measured_freqs, fs)
             ay, _ = harmonic_extract_using_fft(t, accel_y, measured_freqs, fs)
@@ -725,6 +750,10 @@ class StepperResonanceTester:
             else:
                 signal = -accel_x * np.sin(angle_rad) + accel_y * np.cos(angle_rad)
             amps, _ = harmonic_extract_using_fft(t, signal, measured_freqs, fs)
+        diag_end = reactor.monotonic()
+        if diag_end - diag_start >= .050:
+            logging.info("VFA_DIAG FFT start=%.6f duration=%.6f count=%d",
+                         diag_start, diag_end - diag_start, len(t))
         for idx, amp in zip(usable, amps):
             result[idx] = float(amp)
         return result

@@ -134,6 +134,27 @@ class SelectReactor:
         timers = list(self._timers)
         timers.pop(timers.index(timer_handler))
         self._timers = timers
+    # Временная диагностика непрерывных участков работы реактора.
+    def _diag_end_slice(self, g):
+        start = getattr(g, '_diag_start', None)
+        if start is not None:
+            now = self.monotonic()
+            g._diag_start = None
+            if now - start >= .050:
+                logging.info("VFA_DIAG reactor callback=%s start=%.6f end=%.6f duration=%.6f",
+                             g._diag_name, start, now, now - start)
+    def _diag_callback(self, callback, eventtime):
+        # Переключение greenlet само по себе может ждать штатной паузы.
+        if isinstance(getattr(callback, '__self__', None), greenlet.greenlet):
+            return callback(eventtime)
+        g = greenlet.getcurrent()
+        g._diag_name = getattr(callback, '__qualname__', type(callback).__name__)
+        g._diag_start = self.monotonic()
+        try:
+            return callback(eventtime)
+        finally:
+            self._diag_end_slice(g)
+            g._diag_name = None
     def _check_timers(self, eventtime, busy):
         if eventtime < self._next_timer:
             if busy:
@@ -148,7 +169,12 @@ class SelectReactor:
                         if gi[2] >= 10:
                             gc_level = 2
                     self._last_gc_times[gc_level] = eventtime
+                    gc_start = self.monotonic()
                     gc.collect(gc_level)
+                    gc_end = self.monotonic()
+                    if gc_end - gc_start >= .050:
+                        logging.info("VFA_DIAG reactor gc level=%d start=%.6f duration=%.6f",
+                                     gc_level, gc_start, gc_end - gc_start)
                     return 0.
             return min(1., max(.001, self._next_timer - eventtime))
         self._next_timer = self.NEVER
@@ -157,7 +183,13 @@ class SelectReactor:
             waketime = t.waketime
             if eventtime >= waketime:
                 t.waketime = self.NEVER
-                t.waketime = waketime = t.callback(eventtime)
+                now = self.monotonic()
+                if waketime > self.NOW and now - waketime >= .050:
+                    logging.info("VFA_DIAG reactor timer=%s now=%.6f due=%.6f late=%.6f",
+                                 getattr(t.callback, '__qualname__',
+                                         type(t.callback).__name__),
+                                 now, waketime, now - waketime)
+                t.waketime = waketime = self._diag_callback(t.callback, eventtime)
                 if g_dispatch is not self._g_dispatch:
                     self._next_timer = min(self._next_timer, waketime)
                     self._end_greenlet(g_dispatch)
@@ -213,7 +245,11 @@ class SelectReactor:
             if self._g_dispatch is None:
                 return self._sys_pause(waketime)
             # Switch to _check_timers (via g.timer.callback return)
-            return self._g_dispatch.switch(waketime)
+            self._diag_end_slice(g)
+            eventtime = self._g_dispatch.switch(waketime)
+            if getattr(g, '_diag_name', None) is not None:
+                g._diag_start = self.monotonic()
+            return eventtime
         # Pausing the dispatch greenlet - prepare a new greenlet to do dispatch
         if self._greenlets:
             g_next = self._greenlets.pop()
@@ -224,7 +260,10 @@ class SelectReactor:
         g.timer = self.register_timer(g.switch, waketime)
         self._next_timer = self.NOW
         # Switch to _dispatch_loop (via _end_greenlet or direct)
+        self._diag_end_slice(g)
         eventtime = g_next.switch()
+        if getattr(g, '_diag_name', None) is not None:
+            g._diag_start = self.monotonic()
         # This greenlet activated from g.timer.callback (via _check_timers)
         return eventtime
     def _end_greenlet(self, g_old):
@@ -268,18 +307,22 @@ class SelectReactor:
         while self._process:
             timeout = self._check_timers(eventtime, busy)
             busy = False
+            poll_start = self.monotonic()
             res = select.select(self._read_fds, self.write_fds, [], timeout)
             eventtime = self.monotonic()
+            if eventtime - poll_start - timeout >= .050:
+                logging.info("VFA_DIAG reactor poll start=%.6f timeout=%.6f late=%.6f",
+                             poll_start, timeout, eventtime - poll_start - timeout)
             for fd in res[0]:
                 busy = True
-                fd.read_callback(eventtime)
+                self._diag_callback(fd.read_callback, eventtime)
                 if g_dispatch is not self._g_dispatch:
                     self._end_greenlet(g_dispatch)
                     eventtime = self.monotonic()
                     break
             for fd in res[1]:
                 busy = True
-                fd.write_callback(eventtime)
+                self._diag_callback(fd.write_callback, eventtime)
                 if g_dispatch is not self._g_dispatch:
                     self._end_greenlet(g_dispatch)
                     eventtime = self.monotonic()
@@ -341,18 +384,22 @@ class PollReactor(SelectReactor):
         while self._process:
             timeout = self._check_timers(eventtime, busy)
             busy = False
+            poll_start = self.monotonic()
             res = self._poll.poll(int(math.ceil(timeout * 1000.)))
             eventtime = self.monotonic()
+            if eventtime - poll_start - timeout >= .050:
+                logging.info("VFA_DIAG reactor poll start=%.6f timeout=%.6f late=%.6f",
+                             poll_start, timeout, eventtime - poll_start - timeout)
             for fd, event in res:
                 busy = True
                 if event & (select.POLLIN | select.POLLHUP):
-                    self._fds[fd].read_callback(eventtime)
+                    self._diag_callback(self._fds[fd].read_callback, eventtime)
                     if g_dispatch is not self._g_dispatch:
                         self._end_greenlet(g_dispatch)
                         eventtime = self.monotonic()
                         break
                 if event & select.POLLOUT:
-                    self._fds[fd].write_callback(eventtime)
+                    self._diag_callback(self._fds[fd].write_callback, eventtime)
                     if g_dispatch is not self._g_dispatch:
                         self._end_greenlet(g_dispatch)
                         eventtime = self.monotonic()
@@ -392,18 +439,22 @@ class EPollReactor(SelectReactor):
         while self._process:
             timeout = self._check_timers(eventtime, busy)
             busy = False
+            poll_start = self.monotonic()
             res = self._epoll.poll(timeout)
             eventtime = self.monotonic()
+            if eventtime - poll_start - timeout >= .050:
+                logging.info("VFA_DIAG reactor poll start=%.6f timeout=%.6f late=%.6f",
+                             poll_start, timeout, eventtime - poll_start - timeout)
             for fd, event in res:
                 busy = True
                 if event & (select.EPOLLIN | select.EPOLLHUP):
-                    self._fds[fd].read_callback(eventtime)
+                    self._diag_callback(self._fds[fd].read_callback, eventtime)
                     if g_dispatch is not self._g_dispatch:
                         self._end_greenlet(g_dispatch)
                         eventtime = self.monotonic()
                         break
                 if event & select.EPOLLOUT:
-                    self._fds[fd].write_callback(eventtime)
+                    self._diag_callback(self._fds[fd].write_callback, eventtime)
                     if g_dispatch is not self._g_dispatch:
                         self._end_greenlet(g_dispatch)
                         eventtime = self.monotonic()
