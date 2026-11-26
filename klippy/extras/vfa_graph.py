@@ -454,7 +454,7 @@ def plot(folder, names):
                 'Displacement (estimated)' if displacement else 'Acceleration')
             note = ('Оранжевый фон: выше 400 Гц, амплитуды могут быть занижены'
                     if ru else 'Orange: above 400 Hz, amplitudes may be attenuated')
-            fig.suptitle('VFA — %s / T%d — %s\n%s' %
+            fig.suptitle('VFA (Z-Mod) — %s / T%d — %s\n%s' %
                          (motor, metadata['tool'], quantity, note), fontsize=13)
             handles, labels = axes[0, 0].get_legend_handles_labels()
             fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(.5, .925),
