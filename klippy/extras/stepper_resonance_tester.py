@@ -731,8 +731,9 @@ class StepperResonanceTester:
     def do_resonance_vs_amp_phase_test(self, td_amp, td_phase1, td_phase2):
         motor = self.printer.lookup_object('mclib ' + self.stepper)
         values = list(self.test_damping[1][self.tdx[0]])
-        values[0] = int(float("%.3f" % td_amp) * 1000)
-        values[self.phase_idx] = int(float("%.3f" % (td_phase1 % (2. * np.pi))) * 1000)
+        values[0] = round(float("%.3f" % td_amp) * 1000)
+        phase = td_phase1 if self.phase_idx == 1 else td_phase2
+        values[self.phase_idx] = round(float("%.3f" % (phase % (2. * np.pi))) * 1000)
         motor.set_resonance_damping(self.tdx[0], *values)
         vel = self.vel
         freq = vel / self.rotation_dis * self.vel_ratio * 50 * self.tdx[0]
@@ -753,8 +754,8 @@ class StepperResonanceTester:
     def do_resonance_vs_phase_test(self, td_phase):
         motor = self.printer.lookup_object('mclib ' + self.stepper)
         values = list(self.test_damping[1][self.tdx[0]])
-        values[0] = int(float("%.3f" % self.td_amp) * 1000)
-        values[self.phase_idx] = int(float("%.3f" % (td_phase % (2. * np.pi))) * 1000)
+        values[0] = round(float("%.3f" % self.td_amp) * 1000)
+        values[self.phase_idx] = round(float("%.3f" % (td_phase % (2. * np.pi))) * 1000)
         motor.set_resonance_damping(self.tdx[0], *values)
         vel = self.vel
         freq = vel / self.rotation_dis * self.vel_ratio * 50 * self.tdx[0]
@@ -775,8 +776,8 @@ class StepperResonanceTester:
     def do_resonance_vs_amp_test(self, td_amp):
         motor = self.printer.lookup_object('mclib ' + self.stepper)
         values = list(self.test_damping[1][self.tdx[0]])
-        values[0] = int(float("%.3f" % td_amp) * 1000)
-        values[self.phase_idx] = int(float("%.3f" % (self.td_phase % (2. * np.pi))) * 1000)
+        values[0] = round(float("%.3f" % td_amp) * 1000)
+        values[self.phase_idx] = round(float("%.3f" % (self.td_phase % (2. * np.pi))) * 1000)
         motor.set_resonance_damping(self.tdx[0], *values)
         vel = self.vel
         freq = vel / self.rotation_dis * self.vel_ratio * 50 * self.tdx[0]
@@ -833,7 +834,7 @@ class StepperResonanceTester:
           result.append(output)
 
           # Save the result to csv file
-          filename = CSV_DIR + "%s_accel-%s-%d.csv" % (self.stepper, time.strftime("%Y%m%d_%H%M%S"), time.time_ns())
+          filename = CSV_DIR + "%s_accel-%s-%d.csv" % (self.stepper, time.strftime("%Y%m%d_%H%M%S"), int(time.time() * 1000000))
           csv_header = ["time", "accel_x", "accel_y", "accel_z"]
           self.save_to_csv(filename, samples, header=csv_header, format_spec='%.6f')
           gcmd.respond_info("Writing raw accel samples at [%.6f %.6f] to %s file" % (t_move_start, t_move_end, filename))
@@ -966,6 +967,8 @@ class StepperResonanceTester:
                     td_amp_opt = td_amp
                     td_phase_opt = td_phase
         
+        if not result:
+            raise gcmd.error("No resonance mesh measurements")
         gcmd.respond_info("Optimized td_amp=%.3f, td_phase%d=%.3f, resonance_amp=%.3f" 
                                 % (td_amp_opt, self.phase_idx, td_phase_opt, resonance_amp_min))
 
@@ -1201,8 +1204,8 @@ class StepperResonanceTester:
         phase_idx = int(not (direction ^ self.dir_inverted)) + 1
         motor = self.printer.lookup_object('mclib ' + self.stepper)
         values = list(motor.current_damping[tdx])
-        values[0] = int(float("%.3f" % amp) * 1000)
-        values[phase_idx] = int(float("%.3f" % (phase % (2. * np.pi))) * 1000)
+        values[0] = round(float("%.3f" % amp) * 1000)
+        values[phase_idx] = round(float("%.3f" % (phase % (2. * np.pi))) * 1000)
         motor.set_resonance_damping(tdx, *values)
         retry_count = 0
         while retry_count < 5:
@@ -1568,7 +1571,7 @@ class StepperResonanceTester:
         # Сохраняем с той же точностью, с которой параметры передаются MCU.
         values = ("%.3f" % amp, "%.3f" % phase1, "%.3f" % phase2)
         motor = self.printer.lookup_object('mclib ' + self.stepper)
-        motor.set_resonance_damping(tdx, *(int(float(v) * 1000) for v in values))
+        motor.set_resonance_damping(tdx, *(round(float(v) * 1000) for v in values))
         for name, value in zip(('amp', 'phase1', 'phase2'), values):
             pending.append(('mclib ' + self.stepper, 'td%d_%s' % (tdx, name), value))
 
@@ -1611,9 +1614,9 @@ class StepperResonanceTester:
             # в обоих направлениях. Мелкие отклонения не оптимизируем.
             if (any(residual[d] > 1.2 * bare[d] for d in directions)
                     or all(residual[d] >= bare[d] for d in directions)):
-                amp = 0.
-                phases = [0., 0.]
-                gcmd.respond_info("td%d: damping rejected" % tdx)
+                amp, phase1, phase2 = previous[tdx]
+                amp, phases = amp / 1000., [phase1 / 1000., phase2 / 1000.]
+                gcmd.respond_info("td%d: damping rejected, keeping previous values" % tdx)
         self.apply_calibration(tdx, amp, phases[0], phases[1], pending)
 
     def cmd_ZMOD_CALIBRATE_VFA(self, gcmd):
@@ -1638,38 +1641,44 @@ class StepperResonanceTester:
         selected = False
         try:
             try:
-                self.gcode.run_script_from_command("G90\n_T_IN T=%d" % t)
-                selected = True
-                self.gcode.run_script_from_command(
-                    "_SET_GCODE_OFFSET_FAST X=0 Y=0 Z=0 FROM=CALIBRATE_VFA\nM400")
-                status = toolhead.get_status(reactor.monotonic())
-                if not all(axis in status['homed_axes'] for axis in 'xyz'):
-                    raise gcmd.error("VFA: XYZ not homed after tool selection")
-                if status['position'][2] < 100.:
-                    toolhead.manual_move([None, None, 100.], 20.)
-                toolhead.manual_move([130., 130.], 100.)
-                toolhead.wait_moves()
-                # Снимок сделан до обнуления обоих двигателей.
-                for motor in motors:
-                    for tdx in (1, 2, 4):
-                        motor.set_resonance_damping(tdx, 0, 0, 0)
-                for axis in ('x', 'y'):
-                    cmd = self.gcode.create_gcode_command(
-                        "STEPPER_RESONANCE_SEARCH_CALIBRATE",
-                        "STEPPER_RESONANCE_SEARCH_CALIBRATE STEPPER=stepper_" + axis,
-                        {'STEPPER': 'stepper_' + axis})
-                    self.run_test(partial(self.cmd_STEPPER_RESONANCE_SEARCH_CALIBRATE,
-                                          pending=pending), cmd)
-            finally:
-                if selected and not printer.is_shutdown():
+                try:
+                    self.gcode.run_script_from_command("G90\n_T_IN T=%d" % t)
+                    selected = True
+                    self.gcode.run_script_from_command(
+                        "_SET_GCODE_OFFSET_FAST X=0 Y=0 Z=0 FROM=CALIBRATE_VFA\nM400")
                     status = toolhead.get_status(reactor.monotonic())
-                    if (all(axis in status['homed_axes'] for axis in 'xyz')
-                            and color._get_active_extruder(gcmd) == t):
-                        self.gcode.run_script_from_command("_T_OUT NO_Z=0\nM400")
-                    else:
-                        raise gcmd.error("VFA: cannot safely return tool")
-                    if color._get_active_extruder(gcmd) != -1:
-                        raise gcmd.error("VFA: tool was not returned")
+                    if not all(axis in status['homed_axes'] for axis in 'xyz'):
+                        raise gcmd.error("VFA: XYZ not homed after tool selection")
+                    if status['position'][2] < 100.:
+                        toolhead.manual_move([None, None, 100.], 20.)
+                    toolhead.manual_move([130., 130.], 100.)
+                    toolhead.wait_moves()
+                    # Снимок сделан до обнуления обоих двигателей.
+                    for motor in motors:
+                        for tdx in (1, 2, 4):
+                            motor.set_resonance_damping(tdx, 0, 0, 0)
+                    for axis in ('x', 'y'):
+                        cmd = self.gcode.create_gcode_command(
+                            "STEPPER_RESONANCE_SEARCH_CALIBRATE",
+                            "STEPPER_RESONANCE_SEARCH_CALIBRATE STEPPER=stepper_" + axis,
+                            {'STEPPER': 'stepper_' + axis})
+                        self.run_test(partial(self.cmd_STEPPER_RESONANCE_SEARCH_CALIBRATE,
+                                              pending=pending), cmd)
+                finally:
+                    if selected and not printer.is_shutdown():
+                        status = toolhead.get_status(reactor.monotonic())
+                        if (all(axis in status['homed_axes'] for axis in 'xyz')
+                                and color._get_active_extruder(gcmd) == t):
+                            self.gcode.run_script_from_command("_T_OUT NO_Z=0\nM400")
+                        else:
+                            raise gcmd.error("VFA: cannot safely return tool")
+                        if color._get_active_extruder(gcmd) != -1:
+                            raise gcmd.error("VFA: tool was not returned")
+            finally:
+                toolhead.set_max_velocities(None, limits[0], None, limits[1])
+                toolhead.user_max_accel = limits[2]
+                if not absolute and not printer.is_shutdown():
+                    self.gcode.run_script_from_command("G91")
             if printer.is_shutdown():
                 raise gcmd.error("VFA: printer shutdown")
             self.commit_damping(pending)
@@ -1682,11 +1691,6 @@ class StepperResonanceTester:
                         except Exception:
                             logging.exception("Failed to restore VFA damping")
             raise
-        finally:
-            toolhead.set_max_velocities(None, limits[0], None, limits[1])
-            toolhead.user_max_accel = limits[2]
-            if not absolute and not printer.is_shutdown():
-                self.gcode.run_script_from_command("G91")
 
     cmd_STEPPER_RESONANCE_SEARCH_CALIBRATE_help = (
         "Search-based calibration: sweep phase then amplitude "
