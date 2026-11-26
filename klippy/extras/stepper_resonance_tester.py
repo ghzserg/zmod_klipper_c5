@@ -9,6 +9,8 @@ CSV_DIR = "/tmp/"
 #CSV_DIR = "/usr/data/logs/"  # --- IGNORE ---
 BACK_VELOCITY = 300.0  # mm/s
 FREQ_RESOLUTION = 3.0  # Hz
+CRUISE_SETTLE = 0.05
+MAX_MEASURABLE_HZ = 700.
 
 # 寻找指定频率范围内的峰值点
 def find_fft_peak(fft_freqs, fft_amps, freq, range=3.0):
@@ -245,6 +247,8 @@ class StepperResonanceTester:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.test_limits = None
+        self.shaper_state = []
+        self.test_damping = None
         # Get the range of velocity, amp and phase for curve and mesh test
         self.move_accel = config.getfloat('move_accel', 5000.0, minval=2000.0, maxval=10000.0)
         self.vel_min, self.vel_max, self.vel_step = config.getfloatlist('vel_range', count=3)
@@ -363,15 +367,25 @@ class StepperResonanceTester:
         pass
 
     def run_test(self, handler, gcmd):
+        self.test_damping = None
         try:
             handler(gcmd)
         except Exception:
+            if self.test_damping is not None and not self.printer.is_shutdown():
+                motor, previous = self.test_damping
+                for tdx, values in previous.items():
+                    try:
+                        motor.set_resonance_damping(tdx, *values)
+                    except Exception:
+                        logging.exception("Failed to restore resonance damping")
             if self.test_limits is not None:
                 try:
                     self.end_test(gcmd)
                 except Exception:
                     logging.exception("Failed to restore resonance test settings")
             raise
+        finally:
+            self.test_damping = None
 
     # prepare test parameters
     def prepare_test(self, gcmd):
@@ -379,7 +393,7 @@ class StepperResonanceTester:
         self.stepper = gcmd.get('STEPPER')
         self.dir = gcmd.get_int('DIR', 1) # 1 for forward or 0 for backward
         self.vel = gcmd.get_float('VEL', None) # velocity in mm/s
-        self.count = gcmd.get_int('COUNT', 1)
+        self.count = gcmd.get_int('COUNT', 1, minval=1)
         self.axis = gcmd.get('AXIS', 'A') # for curve test, specify the axis to test, e.g., AXIS=X or AXIS=Y
         self.move_params = gcmd.get('MOVE', None) # specify move parameters: MOVE=center_x,center_y,angle,distance
 
@@ -390,6 +404,11 @@ class StepperResonanceTester:
         # check dir validity
         if self.dir not in [0, 1]:
             raise gcmd.error("Invalid DIR value: %s" % self.dir)
+
+        if self.axis not in ('A', 'X', 'Y', 'D', 'Q'):
+            raise gcmd.error("Invalid AXIS value: %s" % self.axis)
+        if self.vel is not None and (not np.isfinite(self.vel) or self.vel <= 0.):
+            raise gcmd.error("Invalid VEL value: %s" % self.vel)
 
         # Parse TDX parameter: a list of integers, e.g., TDX=1,2,4
         try:
@@ -415,12 +434,16 @@ class StepperResonanceTester:
         self.td_phase = self.td_config[self.stepper]['td_phase'][self.td_idx][self.phase_idx-1]
 
         toolhead = self.printer.lookup_object('toolhead')
+        motor = self.printer.lookup_object('mclib ' + self.stepper)
+        self.test_damping = (motor, dict(motor.current_damping))
         self.test_limits = (toolhead.max_accel, toolhead.min_cruise_ratio,
                             toolhead.user_max_accel)
 
         # Disable input shaper if enabled
         input_shaper = self.printer.lookup_object('input_shaper', None)
         if input_shaper is not None:
+            self.shaper_state = [(shaper, shaper.get_shaper(), shaper.saved)
+                                 for shaper in input_shaper.get_shapers()]
             input_shaper.disable_shaping()
 
         # Override maximum acceleration and acceleration to
@@ -440,6 +463,8 @@ class StepperResonanceTester:
                 center_y = float(move_parts[1].strip())
                 angle = float(move_parts[2].strip())
                 distance = float(move_parts[3].strip())
+                if dir == 0:
+                    angle += 180.
             except:
                 raise ValueError("Invalid MOVE parameter format: %s. Expected format: center_x,center_y,angle,distance" % self.move_params)
         else: # 根据中心点、距离和角度，计算起点和终点
@@ -458,6 +483,8 @@ class StepperResonanceTester:
                     angle = 90.0 if dir == 1 else -90.0
 
         # calculate move start and end points based on center, angle and distance
+        if not np.isfinite([center_x, center_y, angle, distance]).all() or distance <= 0.:
+            raise self.printer.command_error("Invalid resonance test path")
         half_dist = distance / 2.0
         cos_a = np.cos(np.radians(angle))
         sin_a = np.sin(np.radians(angle))
@@ -486,7 +513,7 @@ class StepperResonanceTester:
                 self.vel_ratio = abs(sin_a)
         # 防止除零（移动方向与电机轴正交时该电机不动）
         if self.vel_ratio < 1e-6:
-            self.vel_ratio = 1e-6
+            raise self.printer.command_error("Selected stepper does not move along this path")
 
     # perform operations after the end of test
     def end_test(self, gcmd):
@@ -494,14 +521,16 @@ class StepperResonanceTester:
         self.test_limits = None
         toolhead = self.printer.lookup_object('toolhead')
         try:
-            # Восстанавливаем шейперы и при ошибке измерения.
-            input_shaper = self.printer.lookup_object('input_shaper', None)
-            if input_shaper is not None and not self.printer.is_shutdown():
-                input_shaper.enable_shaping()
-                gcmd.respond_info("Re-enabled [input_shaper]")
+            # Восстанавливаем исходное состояние, включая отключённые оси.
+            for shaper, values, saved in self.shaper_state:
+                shaper.n, shaper.A, shaper.T = values
+                shaper.saved = saved
+            if self.shaper_state and not self.printer.is_shutdown():
+                self.printer.lookup_object('input_shaper')._update_input_shaping()
         finally:
             toolhead.set_max_velocities(None, accel, None, cruise_ratio)
             toolhead.user_max_accel = user_accel
+            self.shaper_state = []
 
     def save_to_csv(self, filename, data, header=None, format_spec='%.3f'):
         """
@@ -544,11 +573,11 @@ class StepperResonanceTester:
         end_y = self.move[1][1]
         toolhead = self.printer.lookup_object('toolhead')
 
-        # Move to start position
-        self.gcode.run_script_from_command(
-            "G1 X%.3f Y%.3f F%.3f" % (start_x, start_y, BACK_VELOCITY * 60.0))
-        # Wait for all movements to finish
-        self.gcode.run_script_from_command("M400")
+        if not np.isfinite(move_speed) or not 0. < move_speed <= toolhead.max_velocity:
+            raise self.printer.command_error("Invalid resonance test velocity")
+        # Движение в машинных координатах, без влияния G91, G92 и M220.
+        toolhead.manual_move([start_x, start_y], BACK_VELOCITY)
+        toolhead.wait_moves()
 
         # Start accelerometer measurement
         chip_name = self.td_config[self.stepper]['accel_chip']
@@ -561,12 +590,11 @@ class StepperResonanceTester:
             # (accelerometer timestamps are in the same print_time domain)
             t_move_start = toolhead.get_last_move_time()
             # Move at resonance speed to excite resonance         
-            self.gcode.run_script_from_command(
-                "G1 X%.3f Y%.3f F%.3f" % (end_x, end_y, move_speed * 60.0))
+            toolhead.manual_move([end_x, end_y], move_speed)
             t_move_end = toolhead.get_last_move_time()
             toolhead.dwell(0.2)
             # Wait for all movements to finish
-            self.gcode.run_script_from_command("M400")
+            toolhead.wait_moves()
         finally:
             try:
                 aclient.finish_measurements()
@@ -634,66 +662,61 @@ class StepperResonanceTester:
 
         return resonance_vel, resonance_freq
 
-    def calculate_resonance_amps(self, samples, freqs, move_angle, axis='X', avg_num=1024):
-        if samples is None:
+    def calculate_resonance_amps(self, samples, freqs, move_angle, axis,
+                                 t_start, t_end, vel):
+        data = np.asarray(samples)
+        if data.ndim != 2 or data.shape[1] < 4 or len(data) < 128:
             return None
-        if isinstance(samples, np.ndarray):
-            data = samples
-        else:
-            data = np.array(samples)
-
-        if len(data) < 2 or not np.isfinite(data).all():
+        toolhead = self.printer.lookup_object('toolhead')
+        accel = toolhead.max_accel
+        distance = np.hypot(self.move[1][0] - self.move[0][0],
+                            self.move[1][1] - self.move[0][1])
+        ramp = vel / accel
+        # Проверяем, что заданная скорость действительно достигнута.
+        if distance < vel * ramp or abs(t_end - t_start - (distance / vel + ramp)) > .03:
             return None
-
+        lo, hi = t_start + ramp + CRUISE_SETTLE, t_end - ramp - CRUISE_SETTLE
+        # Используем весь равномерный участок без разгона и торможения.
+        data = data[(data[:, 0] >= lo) & (data[:, 0] <= hi)]
+        if len(data) < 128 or not np.isfinite(data).all():
+            return None
         t = data[:, 0]
-        if t[-1] <= t[0]:
+        dt = np.diff(t)
+        duration = t[-1] - t[0]
+        if duration <= 0. or np.any(dt <= 0.):
             return None
-        accel_x = data[:, 1]
-        accel_y = data[:, 2]
+        fs = (len(t) - 1) / duration
+        chip = self.printer.lookup_object(self.td_config[self.stepper]['accel_chip'])
+        if (abs(fs - chip.data_rate) > .1 * chip.data_rate
+                or np.max(dt) > 1.5 / fs
+                or t[0] - lo > 2. / fs or hi - t[-1] > 2. / fs):
+            return None
+        # Частоты за пределами возможностей акселерометра не измеряем.
+        usable = [i for i, f in enumerate(freqs)
+                  if 20. <= f * duration and f <= min(MAX_MEASURABLE_HZ, .45 * fs)]
+        result = [float('nan')] * len(freqs)
+        if not usable:
+            return result
+        measured_freqs = [freqs[i] for i in usable]
+        accel_x, accel_y = data[:, 1], data[:, 2]
         angle_rad = np.radians(move_angle)
-        accel_d = accel_x * np.cos(angle_rad) + accel_y * np.sin(angle_rad)
-        accel_q = -accel_x * np.sin(angle_rad) + accel_y * np.cos(angle_rad)
-
-        # 使用 accel_d 找到移动起始时间和终止时间 (aligned with move direction)
-        index = np.where(np.abs(accel_d) > 0.5 * np.max(np.abs(accel_d)))[0]
-        if len(index) == 0:
-            return None
-        start_idx = index[0]
-        end_idx = index[-1] + 1
-        mid_idx = (start_idx + end_idx)//2
-
-        # 截取匀速段进行分析，避免加减速段对频谱的影响
-        id0 = max(start_idx, mid_idx - avg_num//2)
-        id1 = min(end_idx, mid_idx + avg_num//2)
-
-        # 分别提取XYDQ方向振动幅度，再计算振动矢量幅度
-        N = len(t)
-        fs = N / (t[-1] - t[0])  # 采样频率
-        t_seg = t[id0:id1]
-        if len(t_seg) < 2:
-            return None
-        accel_x_amp, _ = harmonic_extract_using_fft(t_seg, accel_x[id0:id1], freqs, fs)
-        accel_y_amp, _ = harmonic_extract_using_fft(t_seg, accel_y[id0:id1], freqs, fs)
-        accel_d_amp, _ = harmonic_extract_using_fft(t_seg, accel_d[id0:id1], freqs, fs)
-        accel_q_amp, _ = harmonic_extract_using_fft(t_seg, accel_q[id0:id1], freqs, fs)
-
-        accel_amp = []
-        for ax, ay in zip(accel_x_amp, accel_y_amp):
-            accel_amp.append(np.sqrt(ax**2 + ay**2))
-
-        resonances_amp = {'X': accel_x_amp, 'Y': accel_y_amp, 'D': accel_d_amp, 'Q': accel_q_amp, 'A': accel_amp}
-
-        return resonances_amp[axis]
-
-    def do_resonance_vs_vel_test(self, vel):
-        # Perform move and accel measurement at positive direction
-        samples, _, _ = self.do_move_and_accel_measure(vel)
-
-        # calculate the resonance amplitude at res_point freq
-        freqs = [vel/self.rotation_dis*self.vel_ratio*50*v for v in self.tdx]
-        peak_freqs, resonance_amps = self.calculate_resonance_amps(samples, freqs)
-
-        return resonance_amps
+        if axis == 'A':
+            ax, _ = harmonic_extract_using_fft(t, accel_x, measured_freqs, fs)
+            ay, _ = harmonic_extract_using_fft(t, accel_y, measured_freqs, fs)
+            amps = np.hypot(ax, ay)
+        else:
+            if axis == 'X':
+                signal = accel_x
+            elif axis == 'Y':
+                signal = accel_y
+            elif axis == 'D':
+                signal = accel_x * np.cos(angle_rad) + accel_y * np.sin(angle_rad)
+            else:
+                signal = -accel_x * np.sin(angle_rad) + accel_y * np.cos(angle_rad)
+            amps, _ = harmonic_extract_using_fft(t, signal, measured_freqs, fs)
+        for idx, amp in zip(usable, amps):
+            result[idx] = float(amp)
+        return result
 
     def do_resonance_vs_amp_phase_test(self, td_amp, td_phase1, td_phase2):
         # Set the resonance damping amp and phase
@@ -705,11 +728,13 @@ class StepperResonanceTester:
         vel = self.res_freq/50/self.tdx[0]*self.rotation_dis/self.vel_ratio # resonance frequency
 
         # Perform move and accel measurement at positive direction
-        samples, _, _ = self.do_move_and_accel_measure(vel)
+        samples, t_move_start, t_move_end = self.do_move_and_accel_measure(vel)
 
         # calculate the resonance amplitude
-        resonance_amps = self.calculate_resonance_amps(samples, [self.res_freq], self.move_angle, self.axis)
-        if resonance_amps is None:
+        resonance_amps = self.calculate_resonance_amps(
+            samples, [self.res_freq], self.move_angle, self.axis,
+            t_move_start, t_move_end, vel)
+        if resonance_amps is None or not np.isfinite(resonance_amps[0]):
             raise self.printer.command_error("Invalid resonance measurement")
         resonance_amp = resonance_amps[0]
 
@@ -725,11 +750,13 @@ class StepperResonanceTester:
         vel = self.res_freq/50/self.tdx[0]*self.rotation_dis/self.vel_ratio # resonance frequency
 
         # Perform move and accel measurement at positive direction
-        samples, _, _ = self.do_move_and_accel_measure(vel)
+        samples, t_move_start, t_move_end = self.do_move_and_accel_measure(vel)
 
         # calculate the resonance amplitude
-        resonance_amps = self.calculate_resonance_amps(samples, [self.res_freq], self.move_angle, self.axis)
-        if resonance_amps is None:
+        resonance_amps = self.calculate_resonance_amps(
+            samples, [self.res_freq], self.move_angle, self.axis,
+            t_move_start, t_move_end, vel)
+        if resonance_amps is None or not np.isfinite(resonance_amps[0]):
             raise self.printer.command_error("Invalid resonance measurement")
         resonance_amp = resonance_amps[0]
 
@@ -745,11 +772,13 @@ class StepperResonanceTester:
         vel = self.res_freq/50/self.tdx[0]*self.rotation_dis/self.vel_ratio # resonance frequency
 
         # Perform move and accel measurement at positive direction
-        samples, _, _ = self.do_move_and_accel_measure(vel)
+        samples, t_move_start, t_move_end = self.do_move_and_accel_measure(vel)
 
         # calculate the resonance amplitude
-        resonance_amps = self.calculate_resonance_amps(samples, [self.res_freq], self.move_angle, self.axis)
-        if resonance_amps is None:
+        resonance_amps = self.calculate_resonance_amps(
+            samples, [self.res_freq], self.move_angle, self.axis,
+            t_move_start, t_move_end, vel)
+        if resonance_amps is None or not np.isfinite(resonance_amps[0]):
             raise self.printer.command_error("Invalid resonance measurement")
         resonance_amp = resonance_amps[0]
 
@@ -778,8 +807,10 @@ class StepperResonanceTester:
   
           # calculate the resonance amplitude at specified frequency
           freqs = [self.vel/self.rotation_dis*self.vel_ratio*50*v for v in self.tdx]
-          resonance_amps = self.calculate_resonance_amps(samples, freqs, self.move_angle, self.axis)
-          if resonance_amps is None:
+          resonance_amps = self.calculate_resonance_amps(
+              samples, freqs, self.move_angle, self.axis,
+              t_move_start, t_move_end, self.vel)
+          if resonance_amps is None or not np.isfinite(resonance_amps).any():
               raise gcmd.error("Invalid resonance measurement")
 
           # Output result
@@ -833,11 +864,13 @@ class StepperResonanceTester:
             # resonance_amps = self.calculate_resonance_amps(samples, freqs, self.move_angle, self.axis)
             retry_count = 0
             while retry_count < 5:
-                samples, _, _ = self.do_move_and_accel_measure(vel)
+                samples, t_move_start, t_move_end = self.do_move_and_accel_measure(vel)
 
                 # calculate the resonance amplitude
                 freqs = [vel/self.rotation_dis*self.vel_ratio*50*v for v in self.tdx]
-                resonance_amps = self.calculate_resonance_amps(samples, freqs, self.move_angle, self.axis)
+                resonance_amps = self.calculate_resonance_amps(
+                    samples, freqs, self.move_angle, self.axis,
+                    t_move_start, t_move_end, vel)
                 if resonance_amps is not None:
                     break
                 retry_count += 1
@@ -862,21 +895,23 @@ class StepperResonanceTester:
         self.save_to_csv(filename, result, header=csv_header)
         gcmd.respond_info("Writing stepper resonance test result to %s file" % (filename,))
 
-        # Find the resonance frequency at maximum resonance amp
+        # Выбираем столбец по списку измеренных гармоник.
+        if self.main_tdx not in self.tdx:
+            return
+        if not result:
+            raise gcmd.error("No resonance test speeds")
         data = np.array(result)
-        if self.main_tdx in self.tdx:
-            peak_vel, peak_amp = find_peak_with_interpolation(data[:,[0,int(self.main_tdx//2)+1]])
-            res_freq = peak_vel/self.rotation_dis*self.main_tdx*self.vel_ratio*50 # resonance frequency
-            gcmd.respond_info("Maximum resonance velocity %.1fmm/s, freq %.1f and amp %.1f" % (peak_vel, res_freq, peak_amp))
-
-        	# Determine if apply resonance frequency immeditely
-            if apply == 1:
-                self.td_config[self.stepper]['freq'] = res_freq
-
-        # save the config
+        column = self.tdx.index(self.main_tdx) + 1
+        data = data[np.isfinite(data[:, column])]
+        if not len(data):
+            raise gcmd.error("No measurable resonance points")
+        peak_vel, peak_amp = find_peak_with_interpolation(data[:, [0, column]])
+        res_freq = peak_vel/self.rotation_dis*self.main_tdx*self.vel_ratio*50
+        gcmd.respond_info("Maximum resonance velocity %.1fmm/s, freq %.1f and amp %.1f" % (peak_vel, res_freq, peak_amp))
         configfile = self.printer.lookup_object('configfile')
-        configfile.set('stepper_resonance_tester', '%s_freq'% self.stepper, "%.1f" % (res_freq, ))
-
+        configfile.set('stepper_resonance_tester', '%s_freq' % self.stepper, "%.1f" % res_freq)
+        if apply == 1:
+            self.td_config[self.stepper]['freq'] = res_freq
         gcmd.respond_info(
             "The SAVE_CONFIG command will update the printer config\n"
             "file and restart the printer.")
@@ -1161,12 +1196,14 @@ class StepperResonanceTester:
 
             # calculate the resonance amplitude
             freqs = [vel/self.rotation_dis*self.vel_ratio*50*tdx]
-            resonance_amps = self.calculate_resonance_amps(samples, freqs, self.move_angle, self.axis)
-            if resonance_amps is not None:
+            resonance_amps = self.calculate_resonance_amps(
+                samples, freqs, self.move_angle, self.axis,
+                t_move_start, t_move_end, vel)
+            if resonance_amps is not None and np.isfinite(resonance_amps[0]):
                 break
             retry_count += 1
 
-        if resonance_amps is None:
+        if resonance_amps is None or not np.isfinite(resonance_amps[0]):
             raise gcmd.error("Invalid resonance measurement after 5 attempts")
         return resonance_amps[0]
 
@@ -1529,7 +1566,7 @@ class StepperResonanceTester:
             "~%d total per harmonic)"
             % (n_phase, n_amp, 1 + n_phase + n_amp + 5 + 1, total_moves))
 
-        configfile = self.printer.lookup_object('configfile')
+        pending = []
         results = []
 
         for tdx in self.tdx:
@@ -1566,15 +1603,15 @@ class StepperResonanceTester:
                 if phase1_idx == 2:
                     final_phase1, final_phase2 = final_phase2, final_phase1
 
-                configfile.set('mclib %s' % self.stepper,
+                pending.append(('mclib %s' % self.stepper,
                                'td%d_amp' % tdx,
-                               "%.4f" % final_amp)
-                configfile.set('mclib %s' % self.stepper,
+                               "%.4f" % final_amp))
+                pending.append(('mclib %s' % self.stepper,
                                'td%d_phase1' % tdx,
-                               "%.3f" % final_phase1)
-                configfile.set('mclib %s' % self.stepper,
+                               "%.3f" % final_phase1))
+                pending.append(('mclib %s' % self.stepper,
                                'td%d_phase2' % tdx,
-                               "%.3f" % final_phase2)
+                               "%.3f" % final_phase2))
 
                 cmd_str = ("MCLIB_SET_RESONANCE_DAMP STEPPER=%s TDX=%d "
                            "AMP=%.3f PHASE1=%.3f PHASE2=%.3f"
@@ -1588,12 +1625,12 @@ class StepperResonanceTester:
             else:
                 direction = directions[0]
                 phase_idx = int(not (direction ^ self.dir_inverted)) + 1
-                configfile.set('mclib %s' % self.stepper,
+                pending.append(('mclib %s' % self.stepper,
                                'td%d_amp' % tdx,
-                               "%.4f" % amp_by_dir[direction])
-                configfile.set('mclib %s' % self.stepper,
+                               "%.4f" % amp_by_dir[direction]))
+                pending.append(('mclib %s' % self.stepper,
                                'td%d_phase%d' % (tdx, phase_idx),
-                               "%.3f" % phase_by_dir[direction])
+                               "%.3f" % phase_by_dir[direction]))
 
                 gcmd.respond_info(
                     "td%d result: amp=%.4f, phase%d=%.3f"
@@ -1610,6 +1647,10 @@ class StepperResonanceTester:
         gcmd.respond_info(
             "Search calibration history (%d measurements) saved to %s"
             % (len(results), filename))
+
+        configfile = self.printer.lookup_object('configfile')
+        for section, option, value in pending:
+            configfile.set(section, option, value)
 
         gcmd.respond_info(
             "The SAVE_CONFIG command will update the printer config\n"
@@ -1840,7 +1881,7 @@ class StepperResonanceTester:
             "~%d total per harmonic)"
             % (n_amp, load_angle_max, moves_per_dir, total_moves))
 
-        configfile = self.printer.lookup_object('configfile')
+        pending = []
         results = []
 
         for tdx in self.tdx:
@@ -1922,15 +1963,15 @@ class StepperResonanceTester:
                 if phase1_idx == 2:
                     final_phase1, final_phase2 = final_phase2, final_phase1
 
-                configfile.set('mclib %s' % self.stepper,
+                pending.append(('mclib %s' % self.stepper,
                                'td%d_amp' % tdx,
-                               "%.4f" % final_amp)
-                configfile.set('mclib %s' % self.stepper,
+                               "%.4f" % final_amp))
+                pending.append(('mclib %s' % self.stepper,
                                'td%d_phase1' % tdx,
-                               "%.3f" % final_phase1)
-                configfile.set('mclib %s' % self.stepper,
+                               "%.3f" % final_phase1))
+                pending.append(('mclib %s' % self.stepper,
                                'td%d_phase2' % tdx,
-                               "%.3f" % final_phase2)
+                               "%.3f" % final_phase2))
 
                 cmd_str = ("MCLIB_SET_RESONANCE_DAMP STEPPER=%s TDX=%d "
                            "AMP=%.3f PHASE1=%.3f PHASE2=%.3f"
@@ -1944,12 +1985,12 @@ class StepperResonanceTester:
             else:
                 direction = directions[0]
                 phase_idx = int(not (direction ^ self.dir_inverted)) + 1
-                configfile.set('mclib %s' % self.stepper,
+                pending.append(('mclib %s' % self.stepper,
                                'td%d_amp' % tdx,
-                               "%.4f" % amp_by_dir[direction])
-                configfile.set('mclib %s' % self.stepper,
+                               "%.4f" % amp_by_dir[direction]))
+                pending.append(('mclib %s' % self.stepper,
                                'td%d_phase%d' % (tdx, phase_idx),
-                               "%.3f" % phase_by_dir[direction])
+                               "%.3f" % phase_by_dir[direction]))
 
                 gcmd.respond_info(
                     "td%d result: amp=%.4f, phase%d=%.3f"
@@ -1966,6 +2007,10 @@ class StepperResonanceTester:
         gcmd.respond_info(
             "Refine calibration history (%d measurements) saved to %s"
             % (len(results), filename))
+
+        configfile = self.printer.lookup_object('configfile')
+        for section, option, value in pending:
+            configfile.set(section, option, value)
 
         gcmd.respond_info(
             "The SAVE_CONFIG command will update the printer config\n"
