@@ -810,7 +810,7 @@ class StepperResonanceTester:
           resonance_amps = self.calculate_resonance_amps(
               samples, freqs, self.move_angle, self.axis,
               t_move_start, t_move_end, self.vel)
-          if resonance_amps is None:
+          if resonance_amps is None or not np.isfinite(resonance_amps).any():
               raise gcmd.error("Invalid resonance measurement")
 
           # Output result
@@ -898,6 +898,8 @@ class StepperResonanceTester:
         # Выбираем столбец по списку измеренных гармоник.
         if self.main_tdx not in self.tdx:
             return
+        if not result:
+            raise gcmd.error("No resonance test speeds")
         data = np.array(result)
         column = self.tdx.index(self.main_tdx) + 1
         data = data[np.isfinite(data[:, column])]
