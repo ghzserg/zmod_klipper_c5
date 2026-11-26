@@ -331,14 +331,13 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat, adaptive, ru):
                             apply_damping(motors, modes[label])
                             for direction in (1, 0):
                                 tester.move = path if direction == 1 else path[::-1]
-                                mode = (('без компенсации' if label == 'before' else 'с компенсацией')
-                                        if ru else
-                                        ('without compensation' if label == 'before' else 'with compensation'))
-                                move_dir = (('прямой' if direction else 'обратный')
-                                            if ru else ('forward' if direction else 'reverse'))
+                                mode = (('выкл.' if label == 'before' else 'вкл.')
+                                        if ru else ('off' if label == 'before' else 'on'))
+                                move_dir = (('прям.' if direction else 'обр.')
+                                            if ru else ('fwd' if direction else 'rev'))
                                 gcmd.respond_info(
-                                    ("VFA: двигатель %s, %s, %s проход, %.1f мм/с, %d/%d" if ru else
-                                     "VFA: motor %s, %s, %s pass, %.1f mm/s, %d/%d")
+                                    ("VFA %s: %s, %s, %g мм/с, %d/%d" if ru else
+                                     "VFA %s: %s, %s, %g mm/s, %d/%d")
                                     % (name[-1].upper(), mode, move_dir, vel, trial + 1, repeat))
                                 toolhead.dwell(.2)
                                 toolhead.wait_moves()
