@@ -30,7 +30,7 @@ PLOT_TIMEOUT = 600.
 
 def speeds_for(gcmd, max_velocity, ru):
     low = gcmd.get_float('MIN_SPEED', 20., minval=10., maxval=MAX_SPEED)
-    high = gcmd.get_float('MAX_SPEED', min(MAX_SPEED, max_velocity),
+    high = gcmd.get_float('MAX_SPEED', min(320., max_velocity),
                           minval=10., maxval=min(MAX_SPEED, max_velocity))
     step = gcmd.get_float('STEP', 10., minval=5., maxval=100.)
     if high <= low:

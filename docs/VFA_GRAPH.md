@@ -17,8 +17,9 @@ VFA_GRAPH
 VFA_GRAPH T=2 AXIS=X MIN_SPEED=20 MAX_SPEED=150 STEP=10 REPEAT=1
 ```
 
-By default, both motors are tested in both directions, from 20 to 400 mm/s
+By default, both motors are tested in both directions, from 20 to 320 mm/s
 in steps of 10 mm/s, without exceeding the current velocity limit.
+Use `VFA_GRAPH MAX_SPEED=400` for the extended range.
 The toolhead moves along 45° diagonals within the intersection of the
 0–255 mm area, kinematic limits and VFA range, with a 10 mm margin.
 The default `ADAPTIVE=1` adjusts the path length to provide 0.6 seconds
@@ -105,7 +106,8 @@ VFA_GRAPH T=2 AXIS=X MIN_SPEED=20 MAX_SPEED=150 STEP=10 REPEAT=1
 ```
 
 По умолчанию измеряются оба двигателя, в обоих направлениях, от 20 до
-400 мм/с с шагом 10 мм/с (не выше текущего лимита скорости).
+320 мм/с с шагом 10 мм/с (не выше текущего лимита скорости).
+Для расширенного диапазона используйте `VFA_GRAPH MAX_SPEED=400`.
 Движение по диагоналям 45° в пределах области 0–255 мм,
 границ кинематики и диапазона VFA, с отступом 10 мм от их пересечения.
 По умолчанию `ADAPTIVE=1`: длина рассчитывается для 0,6 с полезного
