@@ -1,6 +1,7 @@
 import numpy as np
 import logging, time
 from functools import partial
+from copy import deepcopy
 #from scipy.signal import butter, filtfilt
 #from scipy.fftpack import fft,ifft
 
@@ -344,6 +345,9 @@ class StepperResonanceTester:
         self.gcode.register_command("STEPPER_RESONANCE_CURVE_TEST",
                                     partial(self.run_test, self.cmd_STEPPER_RESONANCE_CURVE_TEST),
                                     desc=self.cmd_STEPPER_RESONANCE_CURVE_TEST_help)
+        self.gcode.register_command("ZMOD_CALIBRATE_VFA",
+                                    self.cmd_ZMOD_CALIBRATE_VFA,
+                                    desc="Calibrate both VFA motors safely")
         self.gcode.register_command("VFA_GRAPH", self.cmd_VFA_GRAPH,
                                     desc="Measure VFA with and without compensation")
         self.gcode.register_command("STEPPER_RESONANCE_MESH_TEST",
@@ -390,6 +394,12 @@ class StepperResonanceTester:
     # prepare test parameters
     def prepare_test(self, gcmd):
         # Parse parameters
+        now = self.printer.get_reactor().monotonic()
+        stats = self.printer.lookup_object('print_stats', None)
+        pause = self.printer.lookup_object('pause_resume', None)
+        if ((stats is not None and stats.get_status(now)['state'] in ('printing', 'paused'))
+                or (pause is not None and pause.get_status(now)['is_paused'])):
+            raise gcmd.error("VFA calibration is unavailable during printing or pause")
         self.stepper = gcmd.get('STEPPER')
         self.dir = gcmd.get_int('DIR', 1) # 1 for forward or 0 for backward
         self.vel = gcmd.get_float('VEL', None) # velocity in mm/s
@@ -719,20 +729,20 @@ class StepperResonanceTester:
         return result
 
     def do_resonance_vs_amp_phase_test(self, td_amp, td_phase1, td_phase2):
-        # Set the resonance damping amp and phase
-        cmd_str = "MCLIB_SET_RESONANCE_DAMP STEPPER=%s" %(self.stepper)
-        cmd_str += " TDX=%d AMP=%.3f PHASE1=%.3f PHASE2=%.3f" % (self.tdx[0], td_amp, td_phase1, td_phase2)
-        self.gcode.run_script_from_command(cmd_str)
-
-        # calculate the resonance amplitude at res_point freq
-        vel = self.res_freq/50/self.tdx[0]*self.rotation_dis/self.vel_ratio # resonance frequency
+        motor = self.printer.lookup_object('mclib ' + self.stepper)
+        values = list(self.test_damping[1][self.tdx[0]])
+        values[0] = int(float("%.3f" % td_amp) * 1000)
+        values[self.phase_idx] = int(float("%.3f" % (td_phase1 % (2. * np.pi))) * 1000)
+        motor.set_resonance_damping(self.tdx[0], *values)
+        vel = self.vel
+        freq = vel / self.rotation_dis * self.vel_ratio * 50 * self.tdx[0]
 
         # Perform move and accel measurement at positive direction
         samples, t_move_start, t_move_end = self.do_move_and_accel_measure(vel)
 
         # calculate the resonance amplitude
         resonance_amps = self.calculate_resonance_amps(
-            samples, [self.res_freq], self.move_angle, self.axis,
+            samples, [freq], self.move_angle, self.axis,
             t_move_start, t_move_end, vel)
         if resonance_amps is None or not np.isfinite(resonance_amps[0]):
             raise self.printer.command_error("Invalid resonance measurement")
@@ -741,20 +751,20 @@ class StepperResonanceTester:
         return resonance_amp
 
     def do_resonance_vs_phase_test(self, td_phase):
-        # Set the resonance damping amp and phase
-        cmd_str = "MCLIB_SET_RESONANCE_DAMP STEPPER=%s" %(self.stepper)
-        cmd_str += " TDX=%d AMP=%.3f PHASE1=%.3f PHASE2=%.3f" % (self.tdx[0], self.td_amp, td_phase, td_phase)
-        self.gcode.run_script_from_command(cmd_str)
-
-        # calculate the resonance amplitude at res_point freq
-        vel = self.res_freq/50/self.tdx[0]*self.rotation_dis/self.vel_ratio # resonance frequency
+        motor = self.printer.lookup_object('mclib ' + self.stepper)
+        values = list(self.test_damping[1][self.tdx[0]])
+        values[0] = int(float("%.3f" % self.td_amp) * 1000)
+        values[self.phase_idx] = int(float("%.3f" % (td_phase % (2. * np.pi))) * 1000)
+        motor.set_resonance_damping(self.tdx[0], *values)
+        vel = self.vel
+        freq = vel / self.rotation_dis * self.vel_ratio * 50 * self.tdx[0]
 
         # Perform move and accel measurement at positive direction
         samples, t_move_start, t_move_end = self.do_move_and_accel_measure(vel)
 
         # calculate the resonance amplitude
         resonance_amps = self.calculate_resonance_amps(
-            samples, [self.res_freq], self.move_angle, self.axis,
+            samples, [freq], self.move_angle, self.axis,
             t_move_start, t_move_end, vel)
         if resonance_amps is None or not np.isfinite(resonance_amps[0]):
             raise self.printer.command_error("Invalid resonance measurement")
@@ -763,20 +773,20 @@ class StepperResonanceTester:
         return resonance_amp
     
     def do_resonance_vs_amp_test(self, td_amp):
-        # Set the resonance damping amp and phase
-        cmd_str = "MCLIB_SET_RESONANCE_DAMP STEPPER=%s" %(self.stepper)
-        cmd_str += " TDX=%d AMP=%.3f PHASE1=%.3f PHASE2=%.3f" % (self.tdx[0], td_amp, self.td_phase, self.td_phase)
-        self.gcode.run_script_from_command(cmd_str)
-
-        # calculate the resonance amplitude at res_point freq
-        vel = self.res_freq/50/self.tdx[0]*self.rotation_dis/self.vel_ratio # resonance frequency
+        motor = self.printer.lookup_object('mclib ' + self.stepper)
+        values = list(self.test_damping[1][self.tdx[0]])
+        values[0] = int(float("%.3f" % td_amp) * 1000)
+        values[self.phase_idx] = int(float("%.3f" % (self.td_phase % (2. * np.pi))) * 1000)
+        motor.set_resonance_damping(self.tdx[0], *values)
+        vel = self.vel
+        freq = vel / self.rotation_dis * self.vel_ratio * 50 * self.tdx[0]
 
         # Perform move and accel measurement at positive direction
         samples, t_move_start, t_move_end = self.do_move_and_accel_measure(vel)
 
         # calculate the resonance amplitude
         resonance_amps = self.calculate_resonance_amps(
-            samples, [self.res_freq], self.move_angle, self.axis,
+            samples, [freq], self.move_angle, self.axis,
             t_move_start, t_move_end, vel)
         if resonance_amps is None or not np.isfinite(resonance_amps[0]):
             raise self.printer.command_error("Invalid resonance measurement")
@@ -823,7 +833,7 @@ class StepperResonanceTester:
           result.append(output)
 
           # Save the result to csv file
-          filename = CSV_DIR + "%s_accel-%s.csv" % (self.stepper, time.strftime("%Y%m%d_%H%M%S"))
+          filename = CSV_DIR + "%s_accel-%s-%d.csv" % (self.stepper, time.strftime("%Y%m%d_%H%M%S"), time.time_ns())
           csv_header = ["time", "accel_x", "accel_y", "accel_z"]
           self.save_to_csv(filename, samples, header=csv_header, format_spec='%.6f')
           gcmd.respond_info("Writing raw accel samples at [%.6f %.6f] to %s file" % (t_move_start, t_move_end, filename))
@@ -969,9 +979,13 @@ class StepperResonanceTester:
         gcmd.respond_info("Writing stepper resonance test result to %s file" % (filename,)) 
 
         # save the config
-        configfile = self.printer.lookup_object('configfile')
-        configfile.set('mclib %s'%self.stepper, 'td%d_amp'%(tdx), "%.3f" % (td_amp_opt, ))
-        configfile.set('mclib %s'%self.stepper, 'td%d_phase%d'%(tdx, self.phase_idx), "%.3f" % (td_phase_opt, ))
+        pending = []
+        tdx = self.tdx[0]
+        previous = self.test_damping[1][tdx]
+        phases = [previous[1] / 1000., previous[2] / 1000.]
+        phases[self.phase_idx - 1] = td_phase_opt % (2. * np.pi)
+        self.apply_calibration(tdx, td_amp_opt, phases[0], phases[1], pending)
+        self.commit_damping(pending)
         gcmd.respond_info(
             "The SAVE_CONFIG command will update the printer config\n"
             "file and restart the printer.")
@@ -1012,8 +1026,12 @@ class StepperResonanceTester:
         self.end_test(gcmd)
 
         # Save the final parameters to config file
-        configfile = self.printer.lookup_object('configfile')
-        configfile.set('mclib %s'%self.stepper, 'td%d_amp'%(self.tdx[0]), "%.3f" % (td_amp_opt, ))
+        pending = []
+        tdx = self.tdx[0]
+        previous = self.test_damping[1][tdx]
+        phases = [previous[1] / 1000., previous[2] / 1000.]
+        self.apply_calibration(tdx, td_amp_opt, phases[0], phases[1], pending)
+        self.commit_damping(pending)
         gcmd.respond_info(
             "The SAVE_CONFIG command will update the printer config\n"
             "file and restart the printer.")
@@ -1057,8 +1075,13 @@ class StepperResonanceTester:
         self.end_test(gcmd)
 
         # Save the final parameters to config file
-        configfile = self.printer.lookup_object('configfile')
-        configfile.set('mclib %s'%self.stepper, 'td%d_phase%d'%(self.tdx[0], self.phase_idx), "%.3f" % (phase_opt, ))
+        pending = []
+        tdx = self.tdx[0]
+        previous = self.test_damping[1][tdx]
+        phases = [previous[1] / 1000., previous[2] / 1000.]
+        phases[self.phase_idx - 1] = phase_opt % (2. * np.pi)
+        self.apply_calibration(tdx, self.td_amp, phases[0], phases[1], pending)
+        self.commit_damping(pending)
         gcmd.respond_info(
             "The SAVE_CONFIG command will update the printer config\n"
             "file and restart the printer.")
@@ -1176,20 +1199,11 @@ class StepperResonanceTester:
     def _apply_comp_and_measure(self, gcmd, vel, tdx, direction, amp, phase):
         """施加补偿 (amp, phase) 并测量残余幅值（单次）"""
         phase_idx = int(not (direction ^ self.dir_inverted)) + 1
-        if phase_idx == 1:
-            cmd_str = ("MCLIB_SET_RESONANCE_DAMP STEPPER=%s TDX=%d "
-                       "AMP=%.3f PHASE1=%.3f PHASE2=%.3f"
-                       % (self.stepper, tdx, amp, phase, 0.0))
-        else:
-            cmd_str = ("MCLIB_SET_RESONANCE_DAMP STEPPER=%s TDX=%d "
-                       "AMP=%.3f PHASE1=%.3f PHASE2=%.3f"
-                       % (self.stepper, tdx, amp, 0.0, phase))
-        self.gcode.run_script_from_command(cmd_str)
-        # samples, t_move_start, t_move_end = self.do_move_and_accel_measure(vel)
-
-        # # calculate the resonance amplitude
-        # freqs = [vel/self.rotation_dis*self.vel_ratio*50*tdx]
-        # resonance_amps = self.calculate_resonance_amps(samples, freqs, self.move_angle, self.axis)
+        motor = self.printer.lookup_object('mclib ' + self.stepper)
+        values = list(motor.current_damping[tdx])
+        values[0] = int(float("%.3f" % amp) * 1000)
+        values[phase_idx] = int(float("%.3f" % (phase % (2. * np.pi))) * 1000)
+        motor.set_resonance_damping(tdx, *values)
         retry_count = 0
         while retry_count < 5:
             samples, t_move_start, t_move_end = self.do_move_and_accel_measure(vel)
@@ -1528,10 +1542,156 @@ class StepperResonanceTester:
 
         return best_amp, best_phase, history
 
+    def commit_damping(self, pending):
+        # Не оставляем частично подготовленный SAVE_CONFIG при ошибке записи.
+        configfile = self.printer.lookup_object('configfile')
+        previous = deepcopy(configfile.autosave.fileconfig)
+        status = configfile.status_save_pending
+        flag = configfile.save_config_pending
+        try:
+            for section, option, value in pending:
+                configfile.set(section, option, value)
+        except Exception:
+            configfile.autosave.fileconfig = previous
+            configfile.status_save_pending = status
+            configfile.save_config_pending = flag
+            raise
+        for section, option, value in pending:
+            td = self.td_config[section.split()[1]]
+            idx = int(option[2]) // 2
+            if option.endswith('_amp'):
+                td['td_amp'][idx] = float(value)
+            else:
+                td['td_phase'][idx][int(option[-1]) - 1] = float(value)
+
+    def apply_calibration(self, tdx, amp, phase1, phase2, pending):
+        # Сохраняем с той же точностью, с которой параметры передаются MCU.
+        values = ("%.3f" % amp, "%.3f" % phase1, "%.3f" % phase2)
+        motor = self.printer.lookup_object('mclib ' + self.stepper)
+        motor.set_resonance_damping(tdx, *(int(float(v) * 1000) for v in values))
+        for name, value in zip(('amp', 'phase1', 'phase2'), values):
+            pending.append(('mclib ' + self.stepper, 'td%d_%s' % (tdx, name), value))
+
+    def finish_harmonic(self, gcmd, tdx, directions, amp_by_dir,
+                        phase_by_dir, history_by_dir, pending):
+        motor, previous = self.test_damping
+        if len(directions) == 1:
+            direction = directions[0]
+            history = history_by_dir[direction]
+            if len(history) == 1 or history[-1][3] >= history[0][3]:
+                motor.set_resonance_damping(tdx, *previous[tdx])
+                gcmd.respond_info("td%d: no improvement, keeping previous damping" % tdx)
+                return
+            amp = amp_by_dir[direction]
+            phases = [previous[tdx][1] / 1000., previous[tdx][2] / 1000.]
+            idx = int(not (direction ^ self.dir_inverted))
+            phases[idx] = phase_by_dir[direction] % (2. * np.pi)
+        else:
+            # Штатный выбор общей амплитуды не меняем.
+            amp = max(amp_by_dir.values())
+            phases = [0., 0.]
+            bare, residual = {}, {}
+            for direction in directions:
+                idx = int(not (direction ^ self.dir_inverted))
+                phases[idx] = phase_by_dir[direction] % (2. * np.pi)
+                history = history_by_dir[direction]
+                bare[direction] = history[0][3]
+                residual[direction] = history[-1][3]
+                if "%.3f" % amp != "%.3f" % amp_by_dir[direction]:
+                    # Проверяем только новую общую амплитуду, без повторов.
+                    self.update_move(self.stepper, direction)
+                    vel = self.vel
+                    if vel is None:
+                        vel = self.res_freq / 50 / tdx * self.rotation_dis / self.vel_ratio
+                    residual[direction] = self._apply_comp_and_measure(
+                        gcmd, vel, tdx, direction, amp, phases[idx])
+                gcmd.respond_info("td%d dir=%d: final residual %.1f, bare %.1f"
+                                  % (tdx, direction, residual[direction], bare[direction]))
+            # Не сохраняем явное ухудшение (20%) или отсутствие улучшения
+            # в обоих направлениях. Мелкие отклонения не оптимизируем.
+            if (any(residual[d] > 1.2 * bare[d] for d in directions)
+                    or all(residual[d] >= bare[d] for d in directions)):
+                amp = 0.
+                phases = [0., 0.]
+                gcmd.respond_info("td%d: damping rejected" % tdx)
+        self.apply_calibration(tdx, amp, phases[0], phases[1], pending)
+
+    def cmd_ZMOD_CALIBRATE_VFA(self, gcmd):
+        printer = self.printer
+        reactor = printer.get_reactor()
+        now = reactor.monotonic()
+        stats = printer.lookup_object('print_stats', None)
+        pause = printer.lookup_object('pause_resume', None)
+        if (stats is None or stats.get_status(now)['state'] in ('printing', 'paused')
+                or (pause is not None and pause.get_status(now)['is_paused'])):
+            raise gcmd.error("VFA calibration is unavailable during printing or pause")
+        t = gcmd.get_int('T', 0, minval=0, maxval=3)
+        color = printer.lookup_object('zmod_color', None)
+        if color is None or color._get_active_extruder(gcmd) == -2:
+            raise gcmd.error("VFA: invalid tool sensor state")
+        toolhead = printer.lookup_object('toolhead')
+        limits = (toolhead.max_accel, toolhead.min_cruise_ratio, toolhead.user_max_accel)
+        absolute = printer.lookup_object('gcode_move').get_status(now)['absolute_coordinates']
+        motors = [printer.lookup_object('mclib stepper_' + axis) for axis in ('x', 'y')]
+        previous = [dict(motor.current_damping) for motor in motors]
+        pending = []
+        selected = False
+        try:
+            try:
+                self.gcode.run_script_from_command("G90\n_T_IN T=%d" % t)
+                selected = True
+                self.gcode.run_script_from_command(
+                    "_SET_GCODE_OFFSET_FAST X=0 Y=0 Z=0 FROM=CALIBRATE_VFA\nM400")
+                status = toolhead.get_status(reactor.monotonic())
+                if not all(axis in status['homed_axes'] for axis in 'xyz'):
+                    raise gcmd.error("VFA: XYZ not homed after tool selection")
+                if status['position'][2] < 100.:
+                    toolhead.manual_move([None, None, 100.], 20.)
+                toolhead.manual_move([130., 130.], 100.)
+                toolhead.wait_moves()
+                # Снимок сделан до обнуления обоих двигателей.
+                for motor in motors:
+                    for tdx in (1, 2, 4):
+                        motor.set_resonance_damping(tdx, 0, 0, 0)
+                for axis in ('x', 'y'):
+                    cmd = self.gcode.create_gcode_command(
+                        "STEPPER_RESONANCE_SEARCH_CALIBRATE",
+                        "STEPPER_RESONANCE_SEARCH_CALIBRATE STEPPER=stepper_" + axis,
+                        {'STEPPER': 'stepper_' + axis})
+                    self.run_test(partial(self.cmd_STEPPER_RESONANCE_SEARCH_CALIBRATE,
+                                          pending=pending), cmd)
+            finally:
+                if selected and not printer.is_shutdown():
+                    status = toolhead.get_status(reactor.monotonic())
+                    if (all(axis in status['homed_axes'] for axis in 'xyz')
+                            and color._get_active_extruder(gcmd) == t):
+                        self.gcode.run_script_from_command("_T_OUT NO_Z=0\nM400")
+                    else:
+                        raise gcmd.error("VFA: cannot safely return tool")
+                    if color._get_active_extruder(gcmd) != -1:
+                        raise gcmd.error("VFA: tool was not returned")
+            if printer.is_shutdown():
+                raise gcmd.error("VFA: printer shutdown")
+            self.commit_damping(pending)
+        except Exception:
+            if not printer.is_shutdown():
+                for motor, damping in zip(motors, previous):
+                    for tdx, values in damping.items():
+                        try:
+                            motor.set_resonance_damping(tdx, *values)
+                        except Exception:
+                            logging.exception("Failed to restore VFA damping")
+            raise
+        finally:
+            toolhead.set_max_velocities(None, limits[0], None, limits[1])
+            toolhead.user_max_accel = limits[2]
+            if not absolute and not printer.is_shutdown():
+                self.gcode.run_script_from_command("G91")
+
     cmd_STEPPER_RESONANCE_SEARCH_CALIBRATE_help = (
         "Search-based calibration: sweep phase then amplitude "
         "to find optimal resonance damping parameters")
-    def cmd_STEPPER_RESONANCE_SEARCH_CALIBRATE(self, gcmd):
+    def cmd_STEPPER_RESONANCE_SEARCH_CALIBRATE(self, gcmd, pending=None):
         """幅值-相位同时寻优搜索标定
 
         用法:
@@ -1566,7 +1726,9 @@ class StepperResonanceTester:
             "~%d total per harmonic)"
             % (n_phase, n_amp, 1 + n_phase + n_amp + 5 + 1, total_moves))
 
-        pending = []
+        own_pending = pending is None
+        if own_pending:
+            pending = []
         results = []
 
         for tdx in self.tdx:
@@ -1576,6 +1738,7 @@ class StepperResonanceTester:
 
             amp_by_dir = {}
             phase_by_dir = {}
+            history_by_dir = {}
             for direction in directions:
                 dir_name = "Forward" if direction == 1 else "Backward"
                 gcmd.respond_info(
@@ -1588,54 +1751,13 @@ class StepperResonanceTester:
                         n_phase=n_phase, n_amp=n_amp)
                 amp_by_dir[direction] = opt_amp
                 phase_by_dir[direction] = opt_phase
+                history_by_dir[direction] = meas_history
 
                 for h in meas_history:
                     results.append([tdx, direction] + h)
 
-            # 保存结果到配置
-            if len(directions) == 2:
-                final_amp = max(amp_by_dir.get(1, 0.0),
-                                amp_by_dir.get(0, 0.0))
-                phase1_idx = int(not (1 ^ self.dir_inverted)) + 1
-                phase2_idx = int(not (0 ^ self.dir_inverted)) + 1
-                final_phase1 = phase_by_dir.get(1, 0.0)
-                final_phase2 = phase_by_dir.get(0, 0.0)
-                if phase1_idx == 2:
-                    final_phase1, final_phase2 = final_phase2, final_phase1
-
-                pending.append(('mclib %s' % self.stepper,
-                               'td%d_amp' % tdx,
-                               "%.4f" % final_amp))
-                pending.append(('mclib %s' % self.stepper,
-                               'td%d_phase1' % tdx,
-                               "%.3f" % final_phase1))
-                pending.append(('mclib %s' % self.stepper,
-                               'td%d_phase2' % tdx,
-                               "%.3f" % final_phase2))
-
-                cmd_str = ("MCLIB_SET_RESONANCE_DAMP STEPPER=%s TDX=%d "
-                           "AMP=%.3f PHASE1=%.3f PHASE2=%.3f"
-                           % (self.stepper, tdx, final_amp,
-                              final_phase1, final_phase2))
-                self.gcode.run_script_from_command(cmd_str)
-
-                gcmd.respond_info(
-                    "td%d result: amp=%.4f, phase1=%.3f, phase2=%.3f"
-                    % (tdx, final_amp, final_phase1, final_phase2))
-            else:
-                direction = directions[0]
-                phase_idx = int(not (direction ^ self.dir_inverted)) + 1
-                pending.append(('mclib %s' % self.stepper,
-                               'td%d_amp' % tdx,
-                               "%.4f" % amp_by_dir[direction]))
-                pending.append(('mclib %s' % self.stepper,
-                               'td%d_phase%d' % (tdx, phase_idx),
-                               "%.3f" % phase_by_dir[direction]))
-
-                gcmd.respond_info(
-                    "td%d result: amp=%.4f, phase%d=%.3f"
-                    % (tdx, amp_by_dir[direction],
-                       phase_idx, phase_by_dir[direction]))
+            self.finish_harmonic(gcmd, tdx, directions, amp_by_dir,
+                                 phase_by_dir, history_by_dir, pending)
 
         self.end_test(gcmd)
 
@@ -1648,9 +1770,10 @@ class StepperResonanceTester:
             "Search calibration history (%d measurements) saved to %s"
             % (len(results), filename))
 
-        configfile = self.printer.lookup_object('configfile')
-        for section, option, value in pending:
-            configfile.set(section, option, value)
+        if own_pending:
+            self.commit_damping(pending)
+        else:
+            return
 
         gcmd.respond_info(
             "The SAVE_CONFIG command will update the printer config\n"
@@ -1935,6 +2058,7 @@ class StepperResonanceTester:
 
             amp_by_dir = {}
             phase_by_dir = {}
+            history_by_dir = {}
             for direction in directions:
                 dir_name = "Forward" if direction == 1 else "Backward"
 
@@ -1949,53 +2073,13 @@ class StepperResonanceTester:
                         half_spread=half_spread, n_amp=n_amp)
                 amp_by_dir[direction] = opt_amp
                 phase_by_dir[direction] = opt_phase
+                history_by_dir[direction] = meas_history
 
                 for h in meas_history:
                     results.append([tdx, direction] + h)
 
-            # 保存结果到配置
-            if len(directions) == 2:
-                final_amp = max(amp_by_dir.get(1, 0.0),
-                                amp_by_dir.get(0, 0.0))
-                phase1_idx = int(not (1 ^ self.dir_inverted)) + 1
-                final_phase1 = phase_by_dir.get(1, 0.0)
-                final_phase2 = phase_by_dir.get(0, 0.0)
-                if phase1_idx == 2:
-                    final_phase1, final_phase2 = final_phase2, final_phase1
-
-                pending.append(('mclib %s' % self.stepper,
-                               'td%d_amp' % tdx,
-                               "%.4f" % final_amp))
-                pending.append(('mclib %s' % self.stepper,
-                               'td%d_phase1' % tdx,
-                               "%.3f" % final_phase1))
-                pending.append(('mclib %s' % self.stepper,
-                               'td%d_phase2' % tdx,
-                               "%.3f" % final_phase2))
-
-                cmd_str = ("MCLIB_SET_RESONANCE_DAMP STEPPER=%s TDX=%d "
-                           "AMP=%.3f PHASE1=%.3f PHASE2=%.3f"
-                           % (self.stepper, tdx, final_amp,
-                              final_phase1, final_phase2))
-                self.gcode.run_script_from_command(cmd_str)
-
-                gcmd.respond_info(
-                    "td%d result: amp=%.4f, phase1=%.3f, phase2=%.3f"
-                    % (tdx, final_amp, final_phase1, final_phase2))
-            else:
-                direction = directions[0]
-                phase_idx = int(not (direction ^ self.dir_inverted)) + 1
-                pending.append(('mclib %s' % self.stepper,
-                               'td%d_amp' % tdx,
-                               "%.4f" % amp_by_dir[direction]))
-                pending.append(('mclib %s' % self.stepper,
-                               'td%d_phase%d' % (tdx, phase_idx),
-                               "%.3f" % phase_by_dir[direction]))
-
-                gcmd.respond_info(
-                    "td%d result: amp=%.4f, phase%d=%.3f"
-                    % (tdx, amp_by_dir[direction],
-                       phase_idx, phase_by_dir[direction]))
+            self.finish_harmonic(gcmd, tdx, directions, amp_by_dir,
+                                 phase_by_dir, history_by_dir, pending)
 
         self.end_test(gcmd)
 
@@ -2008,9 +2092,7 @@ class StepperResonanceTester:
             "Refine calibration history (%d measurements) saved to %s"
             % (len(results), filename))
 
-        configfile = self.printer.lookup_object('configfile')
-        for section, option, value in pending:
-            configfile.set(section, option, value)
+        self.commit_damping(pending)
 
         gcmd.respond_info(
             "The SAVE_CONFIG command will update the printer config\n"
