@@ -598,8 +598,8 @@ def plot(folder, names):
             growth_lines = []
             if on is not None:
                 if groups:
-                    growth_text = ('Рост ≥20% и ≥0,05 мкм: %s мм/с' if ru else
-                                   'Increase ≥20% and ≥0.05 µm: %s mm/s') % '; '.join(groups)
+                    growth_text = ('Рост ≥20%% и ≥0,05 мкм: %s мм/с' if ru else
+                                   'Increase ≥20%% and ≥0.05 µm: %s mm/s') % '; '.join(groups)
                 else:
                     growth_text = ('Заметного роста не выявлено (≥20% и ≥0,05 мкм).' if ru else
                                    'No notable increase found (≥20% and ≥0.05 µm).')
