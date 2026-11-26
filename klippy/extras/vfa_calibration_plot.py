@@ -17,6 +17,7 @@ MAX_PLOT_FREQ = 400.
 def plot(folder, names):
     with open(os.path.join(folder, 'calibration.json'), encoding='utf-8') as f:
         meta = json.load(f)
+    ru = meta.get('language') == 'ru'
     for name in names:
         files = sorted(glob.glob(os.path.join(folder, name + '_alternative-*Hz.csv')))
         files += sorted(glob.glob(os.path.join(folder, name + '_search_calibrate.csv')))
@@ -36,7 +37,7 @@ def plot(folder, names):
                     points = data[(data['tdx'] == td) & (data['dir'] == direction)]
                     if not len(points):
                         continue
-                    label = 'Forward' if direction else 'Reverse'
+                    label = ('Прямое' if ru else 'Forward') if direction else ('Обратное' if ru else 'Reverse')
                     phase = points[np.isin(points['round'], [1, 2, 4])]
                     for stage, marker in ((1, 'o'), (2, 's'), (4, '^')):
                         subset = phase[phase['round'] == stage]
@@ -59,22 +60,24 @@ def plot(folder, names):
                             stages.append(stage)
                             values.append(subset['residual'][-1])
                     row[2].plot(stages, values, 'o-', color=color, label=label)
-                row[0].set_title('TD%d — phase probes' % td)
-                row[0].set_xlabel('Phase, deg')
-                row[1].set_title('TD%d — amplitude probes' % td)
-                row[1].set_xlabel('Compensation amplitude')
-                row[2].set_title('TD%d — measured residual' % td)
-                row[2].set_xticks([0, 5, 6], ['Bare', 'Individual', 'Common'])
+                row[0].set_title(('TD%d — поиск фазы' if ru else 'TD%d — phase probes') % td)
+                row[0].set_xlabel('Фаза, град.' if ru else 'Phase, deg')
+                row[1].set_title(('TD%d — подбор амплитуды' if ru else 'TD%d — amplitude probes') % td)
+                row[1].set_xlabel('Амплитуда компенсации' if ru else 'Compensation amplitude')
+                row[2].set_title(('TD%d — остаточные вибрации' if ru else 'TD%d — measured residual') % td)
+                row[2].set_xticks([0, 5, 6], ['Без комп.', 'Отдельная', 'Общая'] if ru else ['Bare', 'Individual', 'Common'])
                 for ax in row:
-                    ax.set_ylabel('Acceleration, mm/s²')
+                    ax.set_ylabel('Ускорение, мм/с²' if ru else 'Acceleration, mm/s²')
                     ax.set_ylim(bottom=0)
                     ax.grid(alpha=.25)
                     if ax.get_legend_handles_labels()[0]:
                         ax.legend(fontsize=7)
             fig.suptitle('Z-Mod VFA / T%d / %s' %
                          (meta['tool'], os.path.basename(path)[:-4]))
-            fig.text(.5, .015, 'Common = tested candidate, not necessarily saved. '
-                     'Actual applied values: calibration.json (MCU units).',
+            fig.text(.5, .015, ('Общая = проверенный кандидат, не обязательно сохранённый. '
+                       'Применённые параметры: calibration.json (единицы MCU).' if ru else
+                       'Common = tested candidate, not necessarily saved. '
+                     'Actual applied values: calibration.json (MCU units).'),
                      ha='center', fontsize=9)
             fig.tight_layout(rect=(0, .035, 1, .95))
             fig.savefig(path[:-4] + '.png', dpi=120)
@@ -98,25 +101,30 @@ def plot(folder, names):
         for td, ax in zip(HARMONICS, axes):
             field = 'td%d_amp' % td
             points = before[before['vel'] * scale * td <= MAX_PLOT_FREQ]
-            ax.plot(points['vel'], points[field], 'k.-', label='Bare / forward')
+            ax.plot(points['vel'], points[field], 'k.-', label='Без компенсации / прямое' if ru else 'Bare / forward')
             for path in checks:
                 data = np.atleast_1d(np.genfromtxt(path, delimiter=',', names=True))
                 label = os.path.basename(path)[len(name) + 7:-4]
                 points = data[data['vel'] * scale * td <= MAX_PLOT_FREQ]
+                reverse = label.endswith('dir0')
+                if ru:
+                    label = label.replace('Hz-dir0', ' Гц / обратное').replace(
+                        'Hz-dir1', ' Гц / прямое')
                 ax.plot(points['vel'], points[field],
-                        '--' if label.endswith('dir0') else '-', label=label)
-            ax.set_title('TD%d — up to 400 Hz' % td)
-            ax.set_xlabel('Toolhead speed, mm/s')
-            ax.set_ylabel('Acceleration, mm/s²')
+                        '--' if reverse else '-', label=label)
+            ax.set_title(('TD%d — до 400 Гц' if ru else 'TD%d — up to 400 Hz') % td)
+            ax.set_xlabel('Скорость каретки, мм/с' if ru else 'Toolhead speed, mm/s')
+            ax.set_ylabel('Ускорение, мм/с²' if ru else 'Acceleration, mm/s²')
             ax.set_ylim(bottom=0)
             ax.grid(alpha=.25)
             if any(np.isfinite(line.get_ydata()).any() for line in ax.lines):
                 ax.legend(fontsize=8)
             else:
                 ax.set_xticks([])
-                ax.text(.5, .5, 'No valid data up to 400 Hz',
+                ax.text(.5, .5, 'Нет достоверных данных до 400 Гц' if ru else 'No valid data up to 400 Hz',
                         transform=ax.transAxes, ha='center', va='center')
-        fig.suptitle('Z-Mod VFA / T%d / %s / resonance sweep' %
+        fig.suptitle(('Z-Mod VFA / T%d / %s / поиск резонансов' if ru else
+                      'Z-Mod VFA / T%d / %s / resonance sweep') %
                      (meta['tool'], name))
         fig.tight_layout(rect=(0, 0, 1, .95))
         fig.savefig(sweep[:-4] + '.png', dpi=120)
