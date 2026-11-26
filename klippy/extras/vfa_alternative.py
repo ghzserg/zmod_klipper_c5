@@ -87,8 +87,10 @@ def measure_sweep(tester, gcmd, speeds, rows):
                 rows[vel] = amps
                 break
         else:
-            raise gcmd.error("Invalid VFA sweep measurement at %.2f mm/s" % vel)
-        gcmd.respond_info("  %.2f mm/s: %s" %
+            raise gcmd.error(("Недостоверное измерение VFA при %.2f мм/с" if tester.vfa_ru else
+                "Invalid VFA sweep measurement at %.2f mm/s") % vel)
+        gcmd.respond_info(("  %.2f мм/с: %s" if tester.vfa_ru else
+                "  %.2f mm/s: %s") %
                           (vel, ", ".join("td%d=%.1f" % (t, a)
                                           for t, a in zip(tester.tdx, rows[vel]))))
 
@@ -149,9 +151,11 @@ def tune(tester, gcmd, freq, folder):
                 history.append([tdx, direction, 6, amp, phases[idx], value])
             if not damping_helps(bare, residual):
                 amp, phases = 0., [0., 0.]
-                gcmd.respond_info("td%d: alternative damping rejected" % tdx)
-        gcmd.respond_info("td%d: common amp=%.4f (individual %.4f/%.4f), "
-                          "bare=%s, final=%s" %
+                gcmd.respond_info(("TD%d: альтернативная компенсация отклонена" if tester.vfa_ru else
+                "td%d: alternative damping rejected") % tdx)
+        gcmd.respond_info(("TD%d: общая ампл.=%.4f (отдельно %.4f/%.4f), без компенсации=%s, остаток=%s" if tester.vfa_ru else
+                "td%d: common amp=%.4f (individual %.4f/%.4f), "
+                          "bare=%s, final=%s") %
                           (tdx, amp, amps[0], amps[1], bare, residual))
         tester.apply_calibration(tdx, amp, phases[0], phases[1], pending)
     tester.save_to_csv(os.path.join(folder, "%s_alternative-%.3fHz.csv" %
@@ -185,7 +189,8 @@ def calibrate(tester, gcmd, pending, folder):
         # Для альтернативы используем диапазон OpenCreator 20–300 мм/с.
         vmax = min(300., toolhead.max_velocity)
         if vmax < 20.:
-            raise gcmd.error("VFA alternative requires max_velocity >= 20")
+            raise gcmd.error(("Для альтернативной калибровки VFA требуется max_velocity >= 20" if tester.vfa_ru else
+                "VFA alternative requires max_velocity >= 20"))
         speeds = sweep_speeds(20., vmax)
         for tdx in tester.tdx:
             motor.set_resonance_damping(tdx, 0, 0, 0)
@@ -216,9 +221,11 @@ def calibrate(tester, gcmd, pending, folder):
         freqs = [f for f in freqs if f in usable]
         if not freqs:
             if configured not in usable:
-                raise gcmd.error("No measurable VFA calibration frequency")
+                raise gcmd.error(("Нет доступной частоты калибровки VFA" if tester.vfa_ru else
+                "No measurable VFA calibration frequency"))
             freqs = [configured]
-        gcmd.respond_info("%s: alternative frequencies %s Hz" %
+        gcmd.respond_info(("%s: частоты-кандидаты %s Гц" if tester.vfa_ru else
+                "%s: alternative frequencies %s Hz") %
                           (tester.stepper, ", ".join("%.1f" % f for f in freqs)))
         trials = []
         for freq in freqs:
@@ -231,10 +238,12 @@ def calibrate(tester, gcmd, pending, folder):
             # Сравниваем кандидатов по одинаковым измеряемым точкам.
             mask = np.logical_and.reduce([np.isfinite(t[3]) for t in trials])
             if not mask.any():
-                raise gcmd.error("No comparable VFA sweep measurements")
+                raise gcmd.error(("Нет сопоставимых измерений VFA" if tester.vfa_ru else
+                "No comparable VFA sweep measurements"))
             scores = [float(np.sum(t[3][mask] ** 2)) for t in trials]
             for trial, score in zip(trials, scores):
-                gcmd.respond_info("%s: %.1f Hz score %.1f" %
+                gcmd.respond_info(("%s: %.1f Гц, оценка %.1f" if tester.vfa_ru else
+                "%s: %.1f Hz score %.1f") %
                                   (tester.stepper, trial[0], score))
             winner = trials[int(np.argmin(scores))]
         else:
@@ -243,7 +252,8 @@ def calibrate(tester, gcmd, pending, folder):
         for tdx, params in damping.items():
             motor.set_resonance_damping(tdx, *params)
         pending.extend(values)
-        gcmd.respond_info("%s: alternative selected %.1f Hz" %
+        gcmd.respond_info(("%s: выбрана частота %.1f Гц" if tester.vfa_ru else
+                "%s: alternative selected %.1f Hz") %
                           (tester.stepper, freq))
         # Частота остаётся диагностической: старый алгоритм использует
         # исходную конфигурацию, а SAVE_CONFIG не конфликтует с include.

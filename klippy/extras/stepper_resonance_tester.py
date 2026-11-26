@@ -499,8 +499,8 @@ class StepperResonanceTester:
         if not np.isfinite([center_x, center_y, angle, distance]).all() or distance <= 0.:
             raise self.printer.command_error("Invalid resonance test path")
         half_dist = distance / 2.0
-        cos_a = np.cos(np.radians(angle))
-        sin_a = np.sin(np.radians(angle))
+        cos_a = float(np.cos(np.radians(angle)))
+        sin_a = float(np.sin(np.radians(angle)))
         dx = half_dist * cos_a
         dy = half_dist * sin_a
         start_x = center_x - dx
@@ -603,7 +603,7 @@ class StepperResonanceTester:
             # (accelerometer timestamps are in the same print_time domain)
             t_move_start = toolhead.get_last_move_time()
             # Move at resonance speed to excite resonance         
-            toolhead.manual_move([end_x, end_y], move_speed)
+            toolhead.manual_move([end_x, end_y], float(move_speed))
             t_move_end = toolhead.get_last_move_time()
             toolhead.dwell(0.2)
             # Wait for all movements to finish
@@ -613,6 +613,18 @@ class StepperResonanceTester:
                 aclient.finish_measurements()
             finally:
                 aclient.is_finished = True
+        # Не запускаем следующий ход, пока не обработан последний пакет
+        # и не завершена остановка датчика (если других клиентов нет).
+        bulk = chip.batch_bulk
+        reactor = self.printer.get_reactor()
+        deadline = reactor.monotonic() + 5.
+        while (aclient.handle_batch in bulk.client_cbs
+               or (bulk.is_started and bulk.batch_timer is None)):
+            now = reactor.monotonic()
+            if self.printer.is_shutdown() or now >= deadline:
+                raise self.printer.command_error(
+                    "Accelerometer measurement did not stop")
+            reactor.pause(min(now + .010, deadline))
         samples = aclient.get_samples()
         logging.info("do_move_and_accel_measure: t_move_start=%.6f "
                      "t_move_end=%.6f move_duration=%.6f samples=%d "
@@ -1625,7 +1637,9 @@ class StepperResonanceTester:
         self.apply_calibration(tdx, amp, phases[0], phases[1], pending)
 
     def cmd_ZMOD_CALIBRATE_VFA(self, gcmd):
+        from . import vfa_graph
         printer = self.printer
+        ru = self.vfa_ru = vfa_graph.is_russian(printer)
         reactor = printer.get_reactor()
         now = reactor.monotonic()
         stats = printer.lookup_object('print_stats', None)
@@ -1648,7 +1662,6 @@ class StepperResonanceTester:
         absolute = printer.lookup_object('gcode_move').get_status(now)['absolute_coordinates']
         motors = [printer.lookup_object('mclib stepper_' + axis) for axis in ('x', 'y')]
         previous = [dict(motor.current_damping) for motor in motors]
-        from . import vfa_graph
         root = os.path.join(os.path.dirname(printer.get_start_args()['config_file']),
                             'mod_data', 'vfa')
         os.makedirs(root, exist_ok=True)
@@ -1725,7 +1738,8 @@ class StepperResonanceTester:
         # компенсации. Ошибка графиков не отменяет успешную калибровку.
         try:
             with open(os.path.join(folder, 'calibration.json'), 'w') as f:
-                json.dump({'tool': t, 'algorithm': 'alternative' if alternative
+                json.dump({'tool': t, 'language': 'ru' if ru else 'en',
+                           'algorithm': 'alternative' if alternative
                            else 'flashforge',
                            'damping': {axis: motor.current_damping
                                        for axis, motor in zip(('stepper_x', 'stepper_y'), motors)},
@@ -1733,7 +1747,7 @@ class StepperResonanceTester:
                                                     for axis in ('stepper_x', 'stepper_y')}},
                           f, indent=2)
             vfa_graph.render(self, gcmd, folder, ['stepper_x', 'stepper_y'],
-                             False, calibration=True)
+                             ru, calibration=True)
         except Exception:
             logging.exception("VFA: calibration diagnostics failed")
             gcmd.respond_info("VFA: graph generation failed; CSV: mod_data/vfa/"

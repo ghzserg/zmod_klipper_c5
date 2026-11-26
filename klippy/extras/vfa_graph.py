@@ -147,15 +147,19 @@ def restore_damping(motors, values):
         raise errors[0]
 
 
-def measure(tester, gcmd):
-    printer = tester.printer
+def is_russian(printer):
     lang = configparser.ConfigParser()
     try:
         lang.read(os.path.join(os.path.dirname(printer.get_start_args()['config_file']),
                                'mod_data', 'lang.cfg'), encoding='utf-8')
-        ru = lang.get('zmod', 'language', fallback='en') == 'ru'
+        return lang.get('zmod', 'language', fallback='en') == 'ru'
     except (OSError, UnicodeError, configparser.Error):
-        ru = False
+        return False
+
+
+def measure(tester, gcmd):
+    printer = tester.printer
+    ru = is_russian(printer)
     reactor = printer.get_reactor()
     now = reactor.monotonic()
     toolhead = printer.lookup_object('toolhead')
@@ -436,7 +440,8 @@ def render(tester, gcmd, folder, names, ru, calibration=False):
                 pass
             proc.wait()
     if calibration:
-        gcmd.respond_info("VFA calibration graphs and CSV: " + location)
+        gcmd.respond_info(("VFA: графики калибровки и CSV: " if ru else
+                           "VFA calibration graphs and CSV: ") + location)
         return
     try:
         with open(os.path.join(folder, 'summary.json'), encoding='utf-8') as f:
