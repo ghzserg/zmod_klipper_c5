@@ -508,13 +508,14 @@ def plot(folder, names):
         modes = [('before', 'tab:red')]
         if np.any(data['mode'] == 'after'):
             modes.append(('after', 'tab:green'))
-        speeds = np.unique(data['speed'])
+        # Ограничение относится только к отображению, исходный CSV не меняется.
+        data = data[data['frequency_hz'] <= CAUTION_FREQ]
         for suffix, displacement in (('_displacement', True), ('', False)):
             fig, axes = plt.subplots(3, 3, sharex='row', figsize=(12, 9))
             for h, row in zip(HARMONICS, axes):
                 valid_speeds = set()
                 harmonic = data[data['td'] == h]
-                hz_per_speed = harmonic['frequency_hz'][0] / harmonic['speed'][0]
+                speeds = np.unique(harmonic['speed'])
                 for field, ax, title in zip(
                         ('total_mm_s2', 'along_mm_s2', 'across_mm_s2'), row,
                         titles):
@@ -566,10 +567,6 @@ def plot(folder, names):
                                                         ('forward' if direction else 'reverse')))
                         if worse_x:
                             ax.plot(worse_x, worse_y, 'kx', markersize=6, zorder=5)
-                    left = max(speeds[0], CAUTION_FREQ / hz_per_speed)
-                    right = min(speeds[-1], MAX_FREQ / hz_per_speed)
-                    if right > left:
-                        ax.axvspan(left, right, color='orange', alpha=.15)
                     ax.set_title(('Гармоника %d — %s' if ru else
                                   'Harmonic %d — %s') % (h, title), fontsize=10)
                     ax.grid(True, alpha=.25)
@@ -580,24 +577,25 @@ def plot(folder, names):
                                 ha='center', va='center', color='gray')
                 row[0].set_ylabel(('мкм (оценка)' if displacement else 'мм/с²')
                                   if ru else ('µm (estimated)' if displacement else 'mm/s²'))
-                limits = (sorted(valid_speeds)
-                          or speeds[speeds * hz_per_speed <= MAX_FREQ].tolist()
-                          or speeds.tolist())
-                lo, hi = limits[0], limits[-1]
-                pad = max(.03 * (hi - lo), 1.)
-                row[0].set_xlim(lo - pad, hi + pad)
-                ticks = [lo] + [v for v in row[0].get_xticks()
-                                if lo + .1 * (hi - lo) < v < hi - .1 * (hi - lo)]
-                if hi > lo:
-                    ticks.append(hi)
-                row[0].set_xticks(ticks)
+                limits = sorted(valid_speeds) or speeds.tolist()
+                if limits:
+                    lo, hi = limits[0], limits[-1]
+                    pad = max(.03 * (hi - lo), 1.)
+                    row[0].set_xlim(lo - pad, hi + pad)
+                    ticks = [lo] + [v for v in row[0].get_xticks()
+                                    if lo + .1 * (hi - lo) < v < hi - .1 * (hi - lo)]
+                    if hi > lo:
+                        ticks.append(hi)
+                    row[0].set_xticks(ticks)
+                else:
+                    row[0].set_xticks([])
                 for ax in row:
                     ax.set_xlabel('Скорость каретки, мм/с' if ru else 'Toolhead speed, mm/s')
             motor = ('Двигатель ' if ru else 'Motor ') + name[-1].upper()
             quantity = ('Смещение (оценка)' if displacement else 'Ускорение') if ru else (
                 'Displacement (estimated)' if displacement else 'Acceleration')
-            note = ('Оранжевый фон: выше 400 Гц, амплитуды могут быть занижены'
-                    if ru else 'Orange: above 400 Hz, amplitudes may be attenuated')
+            note = ('Показаны только частоты до 400 Гц. Все измерения в CSV.'
+                    if ru else 'Only frequencies up to 400 Hz are shown. All measurements in CSV.')
             if displacement:
                 medians = np.median(summary_points, axis=0) if summary_points else []
                 summary[name] = {'points': len(summary_points),

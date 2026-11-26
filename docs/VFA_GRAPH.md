@@ -56,15 +56,15 @@ Only matched valid points up to 400 Hz with an increase of at least 20%
 and 0.05 µm are flagged. These are heuristic thresholds, not sensor accuracy.
 The details are saved in `summary.json`.
 
-Each harmonic has its own speed axis, limited to the range of valid
-measurements; missing points inside that range remain gaps.
+Each harmonic has its own speed axis, limited to valid measurements
+up to 400 Hz. Higher frequencies are excluded from PNG graphs because
+the sensor filter may attenuate amplitudes, but remain in the CSV.
+Missing points inside the displayed range remain gaps.
 
 Gaps in the graphs indicate insufficient constant-speed measurement time
 (at least 0.25 seconds and 20 cycles of the harmonic), missing samples,
-or frequencies exceeding 720 Hz or 45% of the actual sampling rate.
-Orange shading marks frequencies above 400 Hz, where the sensor filter
-may attenuate amplitudes. Compare ON and OFF at the same frequency rather
-than relying on absolute amplitudes.
+or frequencies exceeding 45% of the actual sampling rate.
+The measurement limit of 720 Hz is unchanged.
 
 The CSV files contain each repeat, harmonic frequency, validity indicator,
 measurement duration, sampling rate, and longitudinal, transverse and total
@@ -148,14 +148,14 @@ VFA_GRAPH T=2 AXIS=X MIN_SPEED=20 MAX_SPEED=150 STEP=10 REPEAT=1
 Это пороги отбора, а не погрешность датчика. Подробности в `summary.json`.
 
 У каждой гармоники свой масштаб скорости по диапазону достоверных
-измерений; пропущенные точки внутри диапазона остаются разрывами.
+измерений до 400 Гц. Более высокие частоты исключены из PNG: фильтр
+датчика может занижать амплитуды. В CSV они сохраняются.
+Пропущенные точки внутри диапазона остаются разрывами.
 
-Пробелы на графиках
-означают недостаточную длительность равномерного движения (0,25 с и 20
-периодов гармоники), потерю отсчётов или частоту выше 720 Гц (также
-не выше 45% фактической частоты дискретизации). Оранжевая область на
-графиках — частоты выше 400 Гц: амплитуды могут быть занижены фильтром
-датчика. Сравнивайте ON/OFF на одной частоте, не абсолютные амплитуды.
+Пробелы на графиках означают недостаточную длительность равномерного
+движения (0,25 с и 20 периодов гармоники), потерю отсчётов или частоту
+выше 45% фактической частоты дискретизации.
+Ограничение измерений 720 Гц не изменено.
 CSV хранит каждый повтор, частоту гармоники, признак достоверности,
 длительность и частоту дискретизации, продольное, поперечное и суммарное
 ускорение. В `metadata.json` — параметры компенсации в единицах MCU
