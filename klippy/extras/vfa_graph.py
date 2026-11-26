@@ -11,16 +11,21 @@ import tempfile
 
 HARMONICS = (1, 2, 4)
 MOTORS = ('stepper_x', 'stepper_y')
-MAX_FREQ = 400.
+MAX_FREQ = 700.
+CAUTION_FREQ = 400.
+MAX_SPEED = 400.
+MAX_ACCEL = 5000.
+BED_MAX = 255.
+MARGIN = 10.
 SETTLE = 0.05
 MIN_DURATION = 0.25
 MIN_CYCLES = 20
 
 
 def speeds_for(gcmd, max_velocity):
-    low = gcmd.get_float('MIN_SPEED', 20., minval=10., maxval=300.)
-    high = gcmd.get_float('MAX_SPEED', min(300., max_velocity),
-                          minval=10., maxval=min(300., max_velocity))
+    low = gcmd.get_float('MIN_SPEED', 20., minval=10., maxval=MAX_SPEED)
+    high = gcmd.get_float('MAX_SPEED', min(MAX_SPEED, max_velocity),
+                          minval=10., maxval=min(MAX_SPEED, max_velocity))
     step = gcmd.get_float('STEP', 10., minval=5., maxval=100.)
     if high <= low:
         raise gcmd.error("MAX_SPEED must exceed MIN_SPEED")
@@ -55,7 +60,7 @@ def spectrum(samples, start, end, vel, accel, distance, freqs, angle,
         return None
     usable = [i for i, f in enumerate(freqs)
               if MIN_CYCLES <= f * duration
-              and f <= min(MAX_FREQ, .43 * fs)]
+              and f <= min(MAX_FREQ, .45 * fs)]
     result = [(float('nan'),) * 3 for _ in freqs]
     if usable:
         times = data[:, 0] - data[0, 0]
@@ -88,6 +93,8 @@ def sample(tester, gcmd, toolhead, vel, accel, freqs):
     if distance / vel - vel / accel < 2. * SETTLE + MIN_DURATION + .002:
         return missing
     chip = tester.printer.lookup_object(tester.td_config[tester.stepper]['accel_chip'])
+    if not any(f <= min(MAX_FREQ, .45 * chip.data_rate) for f in freqs):
+        return missing
     for _ in range(3):
         toolhead.manual_move(start_xy, min(150., vel))
         toolhead.wait_moves()
@@ -211,21 +218,26 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat):
     else:
         gcmd.respond_info("VFA: no saved compensation; measuring baseline only")
     names = [name for name in MOTORS if name[-1].upper() in axis]
-    accel = min(tester.move_accel, status['max_accel'])
-    tester.move_params = None
+    accel = min(MAX_ACCEL, tester.move_accel, status['max_accel'])
+    if tester.kin != 'corexy':
+        raise gcmd.error("VFA_GRAPH requires CoreXY kinematics")
+    x_min = max(0., tester.x_min, status['axis_minimum'][0]) + MARGIN
+    x_max = min(BED_MAX, tester.x_max, status['axis_maximum'][0]) - MARGIN
+    y_min = max(0., tester.y_min, status['axis_minimum'][1]) + MARGIN
+    y_max = min(BED_MAX, tester.y_max, status['axis_maximum'][1]) - MARGIN
+    side = min(x_max - x_min, y_max - y_min)
+    if side <= 0.:
+        raise gcmd.error("VFA: no safe diagonal inside configured limits")
+    # Равные проекции диагонали нужны для движения одного мотора CoreXY.
+    cx, cy = (x_min + x_max) / 2., (y_min + y_max) / 2.
+    x0, x1 = cx - side / 2., cx + side / 2.
+    y0, y1 = cy - side / 2., cy + side / 2.
     paths = {}
     for name in names:
-        tester.stepper = name
-        tester.rotation_dis = tester.td_config[name]['rotation_dis']
-        for direction in (1, 0):
-            tester.update_move(name, direction)
-            if not all(tester.x_min <= x <= tester.x_max
-                       and tester.y_min <= y <= tester.y_max
-                       and status['axis_minimum'][0] <= x <= status['axis_maximum'][0]
-                       and status['axis_minimum'][1] <= y <= status['axis_maximum'][1]
-                       for x, y in tester.move):
-                raise gcmd.error("VFA test path outside configured limits")
-            paths[name, direction] = (tester.move, tester.vel_ratio)
+        start, end = ((x0, y0), (x1, y1)) if name == 'stepper_x' else (
+            (x0, y1), (x1, y0))
+        paths[name, 1] = ((start, end), math.sqrt(2.))
+        paths[name, 0] = ((end, start), math.sqrt(2.))
     root = os.path.join(os.path.dirname(printer.get_start_args()['config_file']),
                         'mod_data', 'vfa')
     try:
@@ -235,6 +247,7 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat):
         raise gcmd.error("VFA: cannot create output directory: %s" % exc)
     metadata = {'tool': t, 'repeat': repeat, 'accel': accel,
                 'speeds': speeds, 'max_frequency_hz': MAX_FREQ,
+                'caution_frequency_hz': CAUTION_FREQ, 'margin_mm': MARGIN,
                 'min_duration_s': MIN_DURATION, 'min_cycles': MIN_CYCLES,
                 'settle_s': SETTLE, 'input_shaper': 'unchanged',
                 'damping_mcu_units': modes,
@@ -254,7 +267,8 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat):
             with open(filename, 'w') as f:
                 writer = csv.writer(f)
                 writer.writerow(['speed', 'direction', 'repeat', 'mode', 'td',
-                                 'frequency_hz', 'sample_rate_hz', 'duration_s',
+                                 'frequency_hz', 'frequency_band',
+                                 'sample_rate_hz', 'duration_s',
                                  'samples', 'along_mm_s2', 'across_mm_s2',
                                  'total_mm_s2'])
                 for direction in (1, 0):
@@ -276,8 +290,11 @@ def measure_selected(tester, gcmd, t, axis, speeds, repeat):
                                 fs, duration, count, amps = sample(
                                     tester, gcmd, toolhead, vel, accel, freqs)
                                 for h, freq, values in zip(HARMONICS, freqs, amps):
+                                    band = ('unmeasured' if not math.isfinite(values[2])
+                                            else 'caution' if freq > CAUTION_FREQ
+                                            else 'normal')
                                     writer.writerow([vel, direction, trial + 1, label,
-                                                     h, freq, fs, duration, count]
+                                                     h, freq, band, fs, duration, count]
                                                     + list(values))
                             f.flush()
     finally:
@@ -373,6 +390,12 @@ def plot(folder, names):
                             ax.plot(speeds, curves[label], style, color=color,
                                     marker='.', markersize=3,
                                     label='%s / DIR=%d' % (label, direction))
+                    harmonic = data[data['td'] == h]
+                    hz_per_speed = harmonic['frequency_hz'][0] / harmonic['speed'][0]
+                    left = max(speeds[0], CAUTION_FREQ / hz_per_speed)
+                    right = min(speeds[-1], MAX_FREQ / hz_per_speed)
+                    if right > left:
+                        ax.axvspan(left, right, color='orange', alpha=.15)
                     ax.set_title('TD%d — %s' % (h, title), fontsize=10)
                     ax.grid(True, alpha=.25)
                     ax.set_ylim(bottom=0)
@@ -384,7 +407,7 @@ def plot(folder, names):
             for ax in axes[-1]:
                 ax.set_xlabel('Toolhead speed (mm/s)')
             fig.suptitle('VFA — ' + name + ' / ' + os.path.basename(folder).split('_')[1]
-                         + ' (median of matched valid repeats)')
+                         + '\nMedian of matched repeats; orange: >400 Hz, attenuated amplitudes')
             fig.tight_layout()
             fig.savefig(os.path.join(folder, name + suffix + '.png'), dpi=120)
             plt.close(fig)
