@@ -250,6 +250,7 @@ class StepperResonanceTester:
         self.test_limits = None
         self.shaper_state = []
         self.test_damping = None
+        self.alternative = config.getboolean('alternative', True)
         # Get the range of velocity, amp and phase for curve and mesh test
         self.move_accel = config.getfloat('move_accel', 5000.0, minval=2000.0, maxval=10000.0)
         self.vel_min, self.vel_max, self.vel_step = config.getfloatlist('vel_range', count=3)
@@ -1225,7 +1226,7 @@ class StepperResonanceTester:
         return resonance_amps[0]
 
     def search_calibrate_one_direction(self, gcmd, tdx, direction,
-                                       n_phase=12, n_amp=5):
+                                       n_phase=12, n_amp=5, alternative=False):
         """幅值和相位同时寻优搜索标定
 
         利用 R(φ) = R₀ + R₁·cos(φ - φ_opt - π) 的正弦特性：
@@ -1244,7 +1245,7 @@ class StepperResonanceTester:
         总测量次数: 1 + 4 + 5 + n_amp + 3 + 1（默认 19 次移动）
         其中仅 1~2 次处于"坏相位"（Round 1），且使用小幅值
 
-        返回: (optimal_amp, optimal_phase, history)
+        返回: (optimal_amp, optimal_phase, history, amp_fit)
           history: list of [round, amp, phase, residual] 每次测量记录
         """
         # 设置移动参数
@@ -1273,7 +1274,7 @@ class StepperResonanceTester:
         if A_bare < self.min_distortion_threshold:
             gcmd.respond_info(
                 "  Distortion too small (%.1f < %.1f), skipping" % (A_bare, self.min_distortion_threshold))
-            return 0.0, 0.0, history
+            return 0.0, 0.0, history, None
 
         # 试探幅值用小固定值，即使相位反了也只增加 ~10-15% 振动
         # 注意: A_bare 是加速度计单位(~数千)，trial_amp 是补偿电流单位(~0.005-0.050)
@@ -1308,25 +1309,24 @@ class StepperResonanceTester:
                     "  phase=%sdeg  residual=%.1f"
                     % (quad_labels[i], R_quad[i]))
 
-            # 检查是否过补偿：所有残余都大于裸扰动
-            if np.min(R_quad) > A_bare * 0.8:
-                # 用最大残余与 A_bare 的比值估算缩放因子
-                # R_max ≈ |D| + |GA_t|, A_bare ≈ |D|
-                # 目标: |GA_t_new| ≈ |D|/5 → trial_amp_new ≈ trial_amp * A_bare / (5*(R_max - A_bare))
-                R_max = np.max(R_quad)
-                scale = A_bare / (5.0 * max(R_max - A_bare, A_bare * 0.1))
-                scale = min(scale, 0.5)  # 确保缩小，不能放大
-                trial_amp_new = trial_amp * scale
-                trial_amp_new = max(trial_amp_new, 0.005) # 不要过度缩小，保持足够信噪比
-                gcmd.respond_info(
-                    "  WARNING: All residuals > A_bare (min=%.1f > "
-                    "%.1f), trial_amp too large. "
-                    "Reducing %.4f -> %.4f"
-                    % (np.min(R_quad), A_bare,
-                       trial_amp, trial_amp_new))
-                trial_amp = trial_amp_new
-            else:
+            if np.min(R_quad) <= A_bare * 0.8:
                 break
+            # В альтернативном режиме не меняем амплитуду после последнего
+            # измерения и допускаем более слабую пробу (OpenCreator).
+            if alternative and retry == max_retries - 1:
+                break
+            R_max = np.max(R_quad)
+            scale = A_bare / (5.0 * max(R_max - A_bare, A_bare * 0.1))
+            scale = min(scale, 0.5)
+            trial_amp_new = max(trial_amp * scale,
+                                0.002 if alternative else 0.005)
+            if alternative and trial_amp_new > trial_amp * 0.95:
+                break
+            gcmd.respond_info(
+                "  WARNING: All residuals > A_bare (min=%.1f > "
+                "%.1f), trial_amp too large. Reducing %.4f -> %.4f"
+                % (np.min(R_quad), A_bare, trial_amp, trial_amp_new))
+            trial_amp = trial_amp_new
 
         best_phase_r1, amp_est, R0_sq, R1, phase_check_err = \
             self._quadrature_estimate(quad_phases, R_quad, trial_amp)
@@ -1543,7 +1543,7 @@ class StepperResonanceTester:
                A_final, A_bare,
                (1.0 - A_final / A_bare) * 100.0 if A_bare > 1e-6 else 0.0))
 
-        return best_amp, best_phase, history
+        return best_amp, best_phase, history, (c0, c1, c2)
 
     def commit_damping(self, pending):
         # Не оставляем частично подготовленный SAVE_CONFIG при ошибке записи.
@@ -1629,6 +1629,12 @@ class StepperResonanceTester:
                 or (pause is not None and pause.get_status(now)['is_paused'])):
             raise gcmd.error("VFA calibration is unavailable during printing or pause")
         t = gcmd.get_int('T', 0, minval=0, maxval=3)
+        alternative = gcmd.get_int('ALTERNATIVE', int(self.alternative),
+                                   minval=0, maxval=1)
+        gcmd.respond_info("VFA: %s algorithm" %
+                          ("OpenCreator alternative" if alternative else "Flashforge search"))
+        if alternative:
+            from . import vfa_alternative
         color = printer.lookup_object('zmod_color', None)
         if color is None or color._get_active_extruder(gcmd) == -2:
             raise gcmd.error("VFA: invalid tool sensor state")
@@ -1662,8 +1668,12 @@ class StepperResonanceTester:
                             "STEPPER_RESONANCE_SEARCH_CALIBRATE",
                             "STEPPER_RESONANCE_SEARCH_CALIBRATE STEPPER=stepper_" + axis,
                             {'STEPPER': 'stepper_' + axis})
-                        self.run_test(partial(self.cmd_STEPPER_RESONANCE_SEARCH_CALIBRATE,
-                                              pending=pending), cmd)
+                        if alternative:
+                            self.run_test(partial(vfa_alternative.calibrate, self,
+                                                  pending=pending), cmd)
+                        else:
+                            self.run_test(partial(self.cmd_STEPPER_RESONANCE_SEARCH_CALIBRATE,
+                                                  pending=pending), cmd)
                 finally:
                     if selected and not printer.is_shutdown():
                         status = toolhead.get_status(reactor.monotonic())
@@ -1749,7 +1759,7 @@ class StepperResonanceTester:
                     "--- Direction: %s (dir=%d) ---"
                     % (dir_name, direction))
 
-                opt_amp, opt_phase, meas_history = \
+                opt_amp, opt_phase, meas_history, _ = \
                     self.search_calibrate_one_direction(
                         gcmd, tdx, direction,
                         n_phase=n_phase, n_amp=n_amp)
