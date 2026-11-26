@@ -37,15 +37,15 @@ class MCLIB:
         self.hold_current = int(config.getfloat('hold_current', run_current, minval=0., maxval=run_current)* 1000)
         self.interpolate = config.getboolean('interpolate', True)
         self.stall_threshold = int(config.getfloat('stall_threshold', self.bus_voltage, above=0.)* 1000)
-        self.td1_amp = int(config.getfloat('td1_amp', 0., minval=0., maxval=run_current)* 1000)
-        self.td1_phase1 = int(config.getfloat('td1_phase1', 0.)* 1000)
-        self.td1_phase2 = int(config.getfloat('td1_phase2', 0.)* 1000)
-        self.td2_amp = int(config.getfloat('td2_amp', 0., minval=0., maxval=run_current)* 1000)
-        self.td2_phase1 = int(config.getfloat('td2_phase1', 0.)* 1000)
-        self.td2_phase2 = int(config.getfloat('td2_phase2', 0.)* 1000)
-        self.td4_amp = int(config.getfloat('td4_amp', 0., minval=0., maxval=run_current)* 1000)
-        self.td4_phase1 = int(config.getfloat('td4_phase1', 0.)* 1000)
-        self.td4_phase2 = int(config.getfloat('td4_phase2', 0.)* 1000)  
+        self.td1_amp = round(config.getfloat('td1_amp', 0., minval=0., maxval=run_current)* 1000)
+        self.td1_phase1 = round(config.getfloat('td1_phase1', 0.)* 1000)
+        self.td1_phase2 = round(config.getfloat('td1_phase2', 0.)* 1000)
+        self.td2_amp = round(config.getfloat('td2_amp', 0., minval=0., maxval=run_current)* 1000)
+        self.td2_phase1 = round(config.getfloat('td2_phase1', 0.)* 1000)
+        self.td2_phase2 = round(config.getfloat('td2_phase2', 0.)* 1000)
+        self.td4_amp = round(config.getfloat('td4_amp', 0., minval=0., maxval=run_current)* 1000)
+        self.td4_phase1 = round(config.getfloat('td4_phase1', 0.)* 1000)
+        self.td4_phase2 = round(config.getfloat('td4_phase2', 0.)* 1000)  
 
         self.printer.register_event_handler("klippy:mcu_identify",
                                             self._handle_mcu_identify)
@@ -125,9 +125,9 @@ class MCLIB:
         tdx = gcmd.get_int('TDX', 1, minval=1, maxval=4) # 1, 2, 4
         if tdx not in [1, 2, 4]:
             raise gcmd.error("Invalid tdx, only 1, 2 or 4 supported!")
-        amp = int(gcmd.get_float('AMP', None, minval=0., maxval=MAX_CURRENT)* 1000)
-        phase1 = int(gcmd.get_float('PHASE1', None)* 1000)
-        phase2 = int(gcmd.get_float('PHASE2', None)* 1000)
+        amp = round(gcmd.get_float('AMP', None, minval=0., maxval=MAX_CURRENT)* 1000)
+        phase1 = round(gcmd.get_float('PHASE1', None)* 1000)
+        phase2 = round(gcmd.get_float('PHASE2', None)* 1000)
 
         self.set_resonance_damping(tdx, amp, phase1, phase2)
 
