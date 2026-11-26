@@ -159,7 +159,7 @@ def is_russian(printer):
 
 def measure(tester, gcmd):
     printer = tester.printer
-    ru = tester.vfa_ru = is_russian(printer)
+    ru = is_russian(printer)
     reactor = printer.get_reactor()
     now = reactor.monotonic()
     toolhead = printer.lookup_object('toolhead')

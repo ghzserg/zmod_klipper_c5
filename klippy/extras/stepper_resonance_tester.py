@@ -249,7 +249,6 @@ def golden_section_search(f, a, b, tol=0.05, max_iter=20):
 class StepperResonanceTester:
     def __init__(self, config):
         self.printer = config.get_printer()
-        self.vfa_ru = False
         self.test_limits = None
         self.shaper_state = []
         self.test_damping = None
@@ -397,16 +396,13 @@ class StepperResonanceTester:
 
     # prepare test parameters
     def prepare_test(self, gcmd):
-        from . import vfa_graph
-        self.vfa_ru = vfa_graph.is_russian(self.printer)
         # Parse parameters
         now = self.printer.get_reactor().monotonic()
         stats = self.printer.lookup_object('print_stats', None)
         pause = self.printer.lookup_object('pause_resume', None)
         if ((stats is not None and stats.get_status(now)['state'] in ('printing', 'paused'))
                 or (pause is not None and pause.get_status(now)['is_paused'])):
-            raise gcmd.error(("Калибровка VFA недоступна во время печати или паузы" if self.vfa_ru else
-                "VFA calibration is unavailable during printing or pause"))
+            raise gcmd.error("VFA calibration is unavailable during printing or pause")
         self.stepper = gcmd.get('STEPPER')
         self.dir = gcmd.get_int('DIR', 1) # 1 for forward or 0 for backward
         self.vel = gcmd.get_float('VEL', None) # velocity in mm/s
@@ -416,34 +412,28 @@ class StepperResonanceTester:
 
         # check stepper validity
         if self.stepper not in ['stepper_x', 'stepper_y']:
-            raise gcmd.error(("Неверное значение STEPPER: %s" if self.vfa_ru else
-                "Invalid STEPPER value: %s") % self.stepper)   
+            raise gcmd.error("Invalid STEPPER value: %s" % self.stepper)   
 
         # check dir validity
         if self.dir not in [0, 1]:
-            raise gcmd.error(("Неверное значение DIR: %s" if self.vfa_ru else
-                "Invalid DIR value: %s") % self.dir)
+            raise gcmd.error("Invalid DIR value: %s" % self.dir)
 
         if self.axis not in ('A', 'X', 'Y', 'D', 'Q'):
-            raise gcmd.error(("Неверное значение AXIS: %s" if self.vfa_ru else
-                "Invalid AXIS value: %s") % self.axis)
+            raise gcmd.error("Invalid AXIS value: %s" % self.axis)
         if self.vel is not None and (not np.isfinite(self.vel) or self.vel <= 0.):
-            raise gcmd.error(("Неверное значение VEL: %s" if self.vfa_ru else
-                "Invalid VEL value: %s") % self.vel)
+            raise gcmd.error("Invalid VEL value: %s" % self.vel)
 
         # Parse TDX parameter: a list of integers, e.g., TDX=1,2,4
         try:
             self.tdx = [int(v.strip()) for v in gcmd.get('TDX', "1,2,4").split(',')]
             self.tdx.sort()
         except:
-            raise gcmd.error(("Не удалось разобрать параметр '%s'" if self.vfa_ru else
-                "Unable to parse parameter '%s'") % ('TDX',))
+            raise gcmd.error("Unable to parse parameter '%s'" % ('TDX',))
 
         # check tdx validity
         valid_set = {1, 2, 4}
         if not (set(self.tdx).issubset(valid_set) and len(set(self.tdx)) == len(self.tdx)):
-            raise gcmd.error(("Неверный список TDX: %s" if self.vfa_ru else
-                "Invalid TDX value list: %s") % (self.tdx,))
+            raise gcmd.error("Invalid TDX value list: %s" % (self.tdx,))
 
         # Set freq and rotation distance
         self.res_freq = self.td_config[self.stepper]['freq'] # stepper resonance frequency
@@ -507,8 +497,7 @@ class StepperResonanceTester:
 
         # calculate move start and end points based on center, angle and distance
         if not np.isfinite([center_x, center_y, angle, distance]).all() or distance <= 0.:
-            raise self.printer.command_error(("Некорректная траектория измерения VFA" if self.vfa_ru else
-                "Invalid resonance test path"))
+            raise self.printer.command_error("Invalid resonance test path")
         half_dist = distance / 2.0
         cos_a = float(np.cos(np.radians(angle)))
         sin_a = float(np.sin(np.radians(angle)))
@@ -537,8 +526,7 @@ class StepperResonanceTester:
                 self.vel_ratio = abs(sin_a)
         # 防止除零（移动方向与电机轴正交时该电机不动）
         if self.vel_ratio < 1e-6:
-            raise self.printer.command_error(("Выбранный двигатель не движется по этой траектории" if self.vfa_ru else
-                "Selected stepper does not move along this path"))
+            raise self.printer.command_error("Selected stepper does not move along this path")
 
     # perform operations after the end of test
     def end_test(self, gcmd):
@@ -599,8 +587,7 @@ class StepperResonanceTester:
         toolhead = self.printer.lookup_object('toolhead')
 
         if not np.isfinite(move_speed) or not 0. < move_speed <= toolhead.max_velocity:
-            raise self.printer.command_error(("Некорректная скорость измерения VFA" if self.vfa_ru else
-                "Invalid resonance test velocity"))
+            raise self.printer.command_error("Invalid resonance test velocity")
         # Движение в машинных координатах, без влияния G91, G92 и M220.
         toolhead.manual_move([start_x, start_y], BACK_VELOCITY)
         toolhead.wait_moves()
@@ -636,7 +623,6 @@ class StepperResonanceTester:
             now = reactor.monotonic()
             if self.printer.is_shutdown() or now >= deadline:
                 raise self.printer.command_error(
-                    "Не удалось завершить измерение акселерометра" if self.vfa_ru else
                     "Accelerometer measurement did not stop")
             reactor.pause(min(now + .010, deadline))
         samples = aclient.get_samples()
@@ -1250,8 +1236,7 @@ class StepperResonanceTester:
             retry_count += 1
 
         if resonance_amps is None or not np.isfinite(resonance_amps[0]):
-            raise gcmd.error(("Недостоверное измерение VFA после 5 попыток" if self.vfa_ru else
-                "Invalid resonance measurement after 5 attempts"))
+            raise gcmd.error("Invalid resonance measurement after 5 attempts")
         return resonance_amps[0]
 
     def search_calibrate_one_direction(self, gcmd, tdx, direction,
@@ -1292,20 +1277,17 @@ class StepperResonanceTester:
 
         # ---- Step 0: 零补偿测量，获取裸扰动幅值作为试探参考 ----
         gcmd.respond_info(
-            ("Измерение без компенсации (TD%d, напр.=%d, скорость=%.3f мм/с)" if self.vfa_ru else
-                "Search cal: Measuring bare distortion "
-            "(td%d, dir=%d, vel=%.3f mm/s)")
+            "Search cal: Measuring bare distortion "
+            "(td%d, dir=%d, vel=%.3f mm/s)"
             % (tdx, direction, vel))
         A_bare = self._apply_comp_and_measure(
             gcmd, vel, tdx, direction, 0.0, 0.0)
         history.append([0, 0.0, 0.0, A_bare])
-        gcmd.respond_info(("  Амплитуда без компенсации: A=%.4f" if self.vfa_ru else
-                "  Bare distortion: A=%.4f") % A_bare)
+        gcmd.respond_info("  Bare distortion: A=%.4f" % A_bare)
 
         if A_bare < self.min_distortion_threshold:
             gcmd.respond_info(
-                ("  Вибрации ниже порога (%.1f < %.1f), пропуск" if self.vfa_ru else
-                "  Distortion too small (%.1f < %.1f), skipping") % (A_bare, self.min_distortion_threshold))
+                "  Distortion too small (%.1f < %.1f), skipping" % (A_bare, self.min_distortion_threshold))
             return 0.0, 0.0, history, None
 
         # 试探幅值用小固定值，即使相位反了也只增加 ~10-15% 振动
@@ -1328,20 +1310,17 @@ class StepperResonanceTester:
         max_retries = 3
         for retry in range(max_retries):
             gcmd.respond_info(
-                ("Этап 1: поиск фазы по 4 точкам (ампл.=%.4f%s)" if self.vfa_ru else
                 "Round 1: Quadrature phase probe "
-                "(4 points, amp=%.4f%s)")
+                "(4 points, amp=%.4f%s)"
                 % (trial_amp,
-                   (", повтор %d" if self.vfa_ru else
-                ", retry %d") % retry if retry > 0 else ""))
+                   ", retry %d" % retry if retry > 0 else ""))
             R_quad = np.zeros(4)
             for i, ph in enumerate(quad_phases):
                 R_quad[i] = self._apply_comp_and_measure(
                     gcmd, vel, tdx, direction, trial_amp, ph)
                 history.append([1, trial_amp, ph, R_quad[i]])
                 gcmd.respond_info(
-                    ("  фаза=%s°  остаток=%.1f" if self.vfa_ru else
-                "  phase=%sdeg  residual=%.1f")
+                    "  phase=%sdeg  residual=%.1f"
                     % (quad_labels[i], R_quad[i]))
 
             if np.min(R_quad) <= A_bare * 0.8:
@@ -1358,9 +1337,8 @@ class StepperResonanceTester:
             if alternative and trial_amp_new > trial_amp * 0.95:
                 break
             gcmd.respond_info(
-                ("  Недостаточное снижение (мин.=%.1f, исходная=%.1f). Уменьшение пробной амплитуды %.4f → %.4f" if self.vfa_ru else
                 "  WARNING: All residuals > A_bare (min=%.1f > "
-                "%.1f), trial_amp too large. Reducing %.4f -> %.4f")
+                "%.1f), trial_amp too large. Reducing %.4f -> %.4f"
                 % (np.min(R_quad), A_bare, trial_amp, trial_amp_new))
             trial_amp = trial_amp_new
 
@@ -1370,23 +1348,20 @@ class StepperResonanceTester:
         max_idx = np.argmax(R_quad)
 
         gcmd.respond_info(
-            ("  R0²=%.4f, R1=%.4f, оптимальная фаза=%.1f°, худшая=%.1f° (максимум=%s°, ошибка=%.0f°)" if self.vfa_ru else
-                "  R0²=%.4f, R1=%.4f, phase_opt=%.1fdeg, "
-            "worst=%.1fdeg (max_sample=%sdeg, check_err=%.0fdeg)")
+            "  R0²=%.4f, R1=%.4f, phase_opt=%.1fdeg, "
+            "worst=%.1fdeg (max_sample=%sdeg, check_err=%.0fdeg)"
             % (R0_sq, R1, np.degrees(best_phase_r1),
                np.degrees(worst_phase), quad_labels[max_idx],
                np.degrees(phase_check_err)))
         if amp_est is not None:
             gcmd.respond_info(
-                ("  Оценка оптимальной амплитуды: %.4f" if self.vfa_ru else
-                "  Amplitude estimate: A_opt_est=%.4f") % amp_est)
+                "  Amplitude estimate: A_opt_est=%.4f" % amp_est)
 
         if phase_check_err > np.radians(60):
             gcmd.respond_info(
-                ("  Неточная аппроксимация синусоидой (ошибка=%.0f° > 60°), равномерный поиск N_PHASE=%d" if self.vfa_ru else
                 "  WARNING: Sinusoidal model poor fit "
                 "(check_err=%.0fdeg > 60deg), "
-                "falling back to N_PHASE=%d uniform sweep")
+                "falling back to N_PHASE=%d uniform sweep"
                 % (np.degrees(phase_check_err), n_phase))
             # 回退到均匀扫描
             phase_points = np.linspace(
@@ -1397,15 +1372,13 @@ class StepperResonanceTester:
                     gcmd, vel, tdx, direction, trial_amp, ph)
                 history.append([1, trial_amp, ph, residuals_phase[i]])
                 gcmd.respond_info(
-                    ("  фаза=%.1f°  остаток=%.4f" if self.vfa_ru else
-                "  phase=%.1fdeg  residual=%.4f")
+                    "  phase=%.1fdeg  residual=%.4f"
                     % (np.degrees(ph), residuals_phase[i]))
             best_phase_r1, C0_fb, a_fb, b_fb = \
                 self._r2_sinusoidal_fit(phase_points, residuals_phase)
             gcmd.respond_info(
-                ("  Аппроксимация R²: C0=%.0f, a=%.0f, b=%.0f, оптимальная фаза=%.1f°" if self.vfa_ru else
                 "  Fallback R2 LSQ: C0=%.0f, a=%.0f, b=%.0f, "
-                "phase_opt=%.1fdeg")
+                "phase_opt=%.1fdeg"
                 % (C0_fb, a_fb, b_fb, np.degrees(best_phase_r1)))
 
         # ==== Round 2: 精细相位扫描（全在好相位区间）====
@@ -1415,9 +1388,8 @@ class StepperResonanceTester:
                                   best_phase_r1 + delta_ph, n_fine_phase)
 
         gcmd.respond_info(
-            ("Этап 2: уточнение фазы (%d точек, ампл.=%.4f, центр=%.1f° ±30°)" if self.vfa_ru else
-                "Round 2: Fine phase sweep (%d points, amp=%.4f, "
-            "center=%.1fdeg ±30deg)")
+            "Round 2: Fine phase sweep (%d points, amp=%.4f, "
+            "center=%.1fdeg ±30deg)"
             % (n_fine_phase, trial_amp, np.degrees(best_phase_r1)))
         residuals_fine_ph = np.zeros(n_fine_phase)
         for i, ph in enumerate(fine_phases):
@@ -1426,8 +1398,7 @@ class StepperResonanceTester:
                 gcmd, vel, tdx, direction, trial_amp, ph_wrapped)
             history.append([2, trial_amp, ph_wrapped, residuals_fine_ph[i]])
             gcmd.respond_info(
-                ("  фаза=%.1f°  остаток=%.4f" if self.vfa_ru else
-                "  phase=%.1fdeg  residual=%.4f")
+                "  phase=%.1fdeg  residual=%.4f"
                 % (np.degrees(ph_wrapped), residuals_fine_ph[i]))
 
         # R² 正弦模型最小二乘精化相位
@@ -1435,9 +1406,8 @@ class StepperResonanceTester:
             fine_phases, residuals_fine_ph)
 
         gcmd.respond_info(
-            ("  Аппроксимация R²: C0=%.0f, a=%.0f, b=%.0f, оптимальная фаза=%.1f° (было %.1f°)" if self.vfa_ru else
-                "  R2 sinusoidal LSQ: C0=%.0f, a=%.0f, b=%.0f, "
-            "phase_opt=%.1fdeg (from %.1fdeg)")
+            "  R2 sinusoidal LSQ: C0=%.0f, a=%.0f, b=%.0f, "
+            "phase_opt=%.1fdeg (from %.1fdeg)"
             % (C0_r2, a_r2, b_r2,
                np.degrees(best_phase_r2),
                np.degrees(best_phase_r1)))
@@ -1462,12 +1432,10 @@ class StepperResonanceTester:
         history.append([3, mid, best_phase_r2, R_mid])
         history.append([3, b, best_phase_r2, R_b])
         gcmd.respond_info(
-            ("Этап 3: подбор амплитуды (фаза=%.1f°)" if self.vfa_ru else
-                "Round 3: Amplitude optimization (phase=%.1fdeg)")
+            "Round 3: Amplitude optimization (phase=%.1fdeg)"
             % np.degrees(best_phase_r2))
         gcmd.respond_info(
-            ("  Начальные точки [%.4f,%.4f,%.4f] R=[%.1f,%.1f,%.1f]" if self.vfa_ru else
-                "  Init [%.4f,%.4f,%.4f] R=[%.1f,%.1f,%.1f]")
+            "  Init [%.4f,%.4f,%.4f] R=[%.1f,%.1f,%.1f]"
             % (a, mid, b, R_a, R_mid, R_b))
 
         # 迭代优化（最多 n_amp-3 次额外测量）
@@ -1487,8 +1455,7 @@ class StepperResonanceTester:
                     gcmd, vel, tdx, direction, x_opt, best_phase_r2)
                 history.append([3, x_opt, best_phase_r2, R_new])
                 gcmd.respond_info(
-                    ("  шаг %d: ампл.=%.4f  остаток=%.1f" if self.vfa_ru else
-                "  iter%d: amp=%.4f  residual=%.1f")
+                    "  iter%d: amp=%.4f  residual=%.1f"
                     % (it, x_opt, R_new))
                 # 4点中剔除最大residual，保留最优3点bracket
                 all_pts = np.array([a, mid, b, x_opt])
@@ -1517,8 +1484,7 @@ class StepperResonanceTester:
                     gcmd, vel, tdx, direction, a, best_phase_r2)
                 history.append([3, a, best_phase_r2, R_a])
                 gcmd.respond_info(
-                    ("  шаг %d, расширение влево: ампл.=%.4f  остаток=%.1f" if self.vfa_ru else
-                "  iter%d expand left: amp=%.4f  residual=%.1f")
+                    "  iter%d expand left: amp=%.4f  residual=%.1f"
                     % (it, a, R_a))
             else:
                 # 极值在右侧，向右扩展
@@ -1532,8 +1498,7 @@ class StepperResonanceTester:
                     gcmd, vel, tdx, direction, b, best_phase_r2)
                 history.append([3, b, best_phase_r2, R_b])
                 gcmd.respond_info(
-                    ("  шаг %d, расширение вправо: ампл.=%.4f  остаток=%.1f" if self.vfa_ru else
-                "  iter%d expand right: amp=%.4f  residual=%.1f")
+                    "  iter%d expand right: amp=%.4f  residual=%.1f"
                     % (it, b, R_b))
 
         # 最终抛物线拟合
@@ -1542,8 +1507,7 @@ class StepperResonanceTester:
         best_amp, c0, c1, c2 = self._parabolic_fit_amplitude(
             amp_points, residuals_amp)
         gcmd.respond_info(
-            ("  Оптимальная амплитуда=%.4f  интервал=[%.4f,%.4f]" if self.vfa_ru else
-                "  Result: amp_opt=%.4f  bracket=[%.4f,%.4f]")
+            "  Result: amp_opt=%.4f  bracket=[%.4f,%.4f]"
             % (best_amp, a, b))
 
         # ==== Round 4: 最终相位精化（用最优幅值）====
@@ -1556,9 +1520,8 @@ class StepperResonanceTester:
                                    best_phase_r2 + delta_final, n_final)
 
         gcmd.respond_info(
-            ("Этап 4: окончательное уточнение фазы (%d точек, ампл.=%.4f, ±15°)" if self.vfa_ru else
-                "Round 4: Final phase refinement "
-            "(%d points, amp=%.4f, ±15deg)")
+            "Round 4: Final phase refinement "
+            "(%d points, amp=%.4f, ±15deg)"
             % (n_final, best_amp))
         residuals_final = np.zeros(n_final)
         for i, ph in enumerate(final_phases):
@@ -1567,8 +1530,7 @@ class StepperResonanceTester:
                 gcmd, vel, tdx, direction, best_amp, ph_wrapped)
             history.append([4, best_amp, ph_wrapped, residuals_final[i]])
             gcmd.respond_info(
-                ("  фаза=%.1f°  остаток=%.4f" if self.vfa_ru else
-                "  phase=%.1fdeg  residual=%.4f")
+                "  phase=%.1fdeg  residual=%.4f"
                 % (np.degrees(ph_wrapped), residuals_final[i]))
 
         # R² 正弦模型最小二乘精化相位
@@ -1577,9 +1539,8 @@ class StepperResonanceTester:
         best_phase = best_phase % (2.0 * np.pi)
 
         gcmd.respond_info(
-            ("  Аппроксимация R²: C0=%.0f, a=%.0f, b=%.0f, оптимальная фаза=%.1f° (было %.1f°)" if self.vfa_ru else
-                "  R2 sinusoidal LSQ: C0=%.0f, a=%.0f, b=%.0f, "
-            "phase_opt=%.1fdeg (from %.1fdeg)")
+            "  R2 sinusoidal LSQ: C0=%.0f, a=%.0f, b=%.0f, "
+            "phase_opt=%.1fdeg (from %.1fdeg)"
             % (C0_r4, a_r4, b_r4,
                np.degrees(best_phase),
                np.degrees(best_phase_r2)))
@@ -1590,9 +1551,8 @@ class StepperResonanceTester:
         history.append([5, best_amp, best_phase, A_final])
 
         gcmd.respond_info(
-            ("Результат: ампл.=%.4f, фаза=%.3f рад (%.1f°), остаток=%.4f (исходная=%.4f, снижение=%.1f%%)" if self.vfa_ru else
-                "Search result: amp=%.4f, phase=%.3f rad (%.1fdeg), "
-            "residual=%.4f (bare=%.4f, reduction=%.1f%%)")
+            "Search result: amp=%.4f, phase=%.3f rad (%.1fdeg), "
+            "residual=%.4f (bare=%.4f, reduction=%.1f%%)"
             % (best_amp, best_phase, np.degrees(best_phase),
                A_final, A_bare,
                (1.0 - A_final / A_bare) * 100.0 if A_bare > 1e-6 else 0.0))
@@ -1637,8 +1597,7 @@ class StepperResonanceTester:
             history = history_by_dir[direction]
             if len(history) == 1 or history[-1][3] >= history[0][3]:
                 motor.set_resonance_damping(tdx, *previous[tdx])
-                gcmd.respond_info(("TD%d: улучшения нет, прежняя компенсация сохранена" if self.vfa_ru else
-                "td%d: no improvement, keeping previous damping") % tdx)
+                gcmd.respond_info("td%d: no improvement, keeping previous damping" % tdx)
                 return
             amp = amp_by_dir[direction]
             phases = [previous[tdx][1] / 1000., previous[tdx][2] / 1000.]
@@ -1666,8 +1625,7 @@ class StepperResonanceTester:
                 if results is not None:
                     results.append([tdx, direction, 6, amp, phases[idx],
                                     residual[direction]])
-                gcmd.respond_info(("TD%d, напр.=%d: остаток %.1f, без компенсации %.1f" if self.vfa_ru else
-                "td%d dir=%d: final residual %.1f, bare %.1f")
+                gcmd.respond_info("td%d dir=%d: final residual %.1f, bare %.1f"
                                   % (tdx, direction, residual[direction], bare[direction]))
             # Не сохраняем явное ухудшение (20%) или отсутствие улучшения
             # в обоих направлениях. Мелкие отклонения не оптимизируем.
@@ -1675,8 +1633,7 @@ class StepperResonanceTester:
                     or all(residual[d] >= bare[d] for d in directions)):
                 amp, phase1, phase2 = previous[tdx]
                 amp, phases = amp / 1000., [phase1 / 1000., phase2 / 1000.]
-                gcmd.respond_info(("TD%d: компенсация отклонена, прежние параметры сохранены" if self.vfa_ru else
-                "td%d: damping rejected, keeping previous values") % tdx)
+                gcmd.respond_info("td%d: damping rejected, keeping previous values" % tdx)
         self.apply_calibration(tdx, amp, phases[0], phases[1], pending)
 
     def cmd_ZMOD_CALIBRATE_VFA(self, gcmd):
@@ -1689,22 +1646,17 @@ class StepperResonanceTester:
         pause = printer.lookup_object('pause_resume', None)
         if (stats is None or stats.get_status(now)['state'] in ('printing', 'paused')
                 or (pause is not None and pause.get_status(now)['is_paused'])):
-            raise gcmd.error(("Калибровка VFA недоступна во время печати или паузы" if ru else
-                "VFA calibration is unavailable during printing or pause"))
+            raise gcmd.error("VFA calibration is unavailable during printing or pause")
         t = gcmd.get_int('T', 0, minval=0, maxval=3)
         alternative = gcmd.get_int('ALTERNATIVE', int(self.alternative),
                                    minval=0, maxval=1)
-        gcmd.respond_info(
-            ("VFA: альтернативный алгоритм OpenCreator" if alternative else
-             "VFA: штатный алгоритм Flashforge") if ru else
-            ("VFA: OpenCreator alternative algorithm" if alternative else
-             "VFA: Flashforge search algorithm"))
+        gcmd.respond_info("VFA: %s algorithm" %
+                          ("OpenCreator alternative" if alternative else "Flashforge search"))
         if alternative:
             from . import vfa_alternative
         color = printer.lookup_object('zmod_color', None)
         if color is None or color._get_active_extruder(gcmd) == -2:
-            raise gcmd.error(("VFA: неверное состояние датчиков инструмента" if ru else
-                "VFA: invalid tool sensor state"))
+            raise gcmd.error("VFA: invalid tool sensor state")
         toolhead = printer.lookup_object('toolhead')
         limits = (toolhead.max_accel, toolhead.min_cruise_ratio, toolhead.user_max_accel)
         absolute = printer.lookup_object('gcode_move').get_status(now)['absolute_coordinates']
@@ -1722,8 +1674,7 @@ class StepperResonanceTester:
                 break
             except FileExistsError:
                 stamp += 1
-        gcmd.respond_info(("VFA: CSV калибровки: mod_data/vfa/" if ru else
-                "VFA calibration CSV: mod_data/vfa/") + os.path.basename(folder))
+        gcmd.respond_info("VFA calibration CSV: mod_data/vfa/" + os.path.basename(folder))
         pending = []
         selected = False
         try:
@@ -1735,8 +1686,7 @@ class StepperResonanceTester:
                         "_SET_GCODE_OFFSET_FAST X=0 Y=0 Z=0 FROM=CALIBRATE_VFA\nM400")
                     status = toolhead.get_status(reactor.monotonic())
                     if not all(axis in status['homed_axes'] for axis in 'xyz'):
-                        raise gcmd.error(("VFA: не определено положение XYZ после выбора инструмента" if ru else
-                "VFA: XYZ not homed after tool selection"))
+                        raise gcmd.error("VFA: XYZ not homed after tool selection")
                     if status['position'][2] < 100.:
                         toolhead.manual_move([None, None, 100.], 20.)
                     toolhead.manual_move([130., 130.], 100.)
@@ -1763,19 +1713,16 @@ class StepperResonanceTester:
                                 and color._get_active_extruder(gcmd) == t):
                             self.gcode.run_script_from_command("_T_OUT NO_Z=0\nM400")
                         else:
-                            raise gcmd.error(("VFA: невозможно безопасно вернуть инструмент" if ru else
-                "VFA: cannot safely return tool"))
+                            raise gcmd.error("VFA: cannot safely return tool")
                         if color._get_active_extruder(gcmd) != -1:
-                            raise gcmd.error(("VFA: инструмент не возвращён" if ru else
-                "VFA: tool was not returned"))
+                            raise gcmd.error("VFA: tool was not returned")
             finally:
                 toolhead.set_max_velocities(None, limits[0], None, limits[1])
                 toolhead.user_max_accel = limits[2]
                 if not absolute and not printer.is_shutdown():
                     self.gcode.run_script_from_command("G91")
             if printer.is_shutdown():
-                raise gcmd.error(("VFA: Klipper аварийно остановлен" if ru else
-                "VFA: printer shutdown"))
+                raise gcmd.error("VFA: printer shutdown")
             self.commit_damping(pending)
         except Exception:
             if not printer.is_shutdown():
@@ -1803,8 +1750,7 @@ class StepperResonanceTester:
                              ru, calibration=True)
         except Exception:
             logging.exception("VFA: calibration diagnostics failed")
-            gcmd.respond_info(("VFA: не удалось построить графики; CSV: mod_data/vfa/" if ru else
-                "VFA: graph generation failed; CSV: mod_data/vfa/")
+            gcmd.respond_info("VFA: graph generation failed; CSV: mod_data/vfa/"
                               + os.path.basename(folder))
 
     cmd_STEPPER_RESONANCE_SEARCH_CALIBRATE_help = (
@@ -1840,10 +1786,9 @@ class StepperResonanceTester:
 
         total_moves = (1 + n_phase + n_amp + 5 + 1) * len(directions)
         gcmd.respond_info(
-            ("Калибровка: N_PHASE=%d, N_AMP=%d (~%d движений на гармонику в одном направлении, ~%d всего)" if self.vfa_ru else
-                "Search calibration: N_PHASE=%d, N_AMP=%d "
+            "Search calibration: N_PHASE=%d, N_AMP=%d "
             "(~%d moves per harmonic per direction, "
-            "~%d total per harmonic)")
+            "~%d total per harmonic)"
             % (n_phase, n_amp, 1 + n_phase + n_amp + 5 + 1, total_moves))
 
         own_pending = pending is None
@@ -1853,20 +1798,16 @@ class StepperResonanceTester:
 
         for tdx in self.tdx:
             gcmd.respond_info(
-                ("===== Калибровка TD%d для %s =====" if self.vfa_ru else
-                "===== Search calibrating td%d for %s =====")
+                "===== Search calibrating td%d for %s ====="
                 % (tdx, self.stepper))
 
             amp_by_dir = {}
             phase_by_dir = {}
             history_by_dir = {}
             for direction in directions:
-                dir_name = ("Прямое" if self.vfa_ru else
-                "Forward") if direction == 1 else ("Обратное" if self.vfa_ru else
-                "Backward")
+                dir_name = "Forward" if direction == 1 else "Backward"
                 gcmd.respond_info(
-                    ("--- Направление: %s (dir=%d) ---" if self.vfa_ru else
-                "--- Direction: %s (dir=%d) ---")
+                    "--- Direction: %s (dir=%d) ---"
                     % (dir_name, direction))
 
                 opt_amp, opt_phase, meas_history, _ = \
@@ -1894,8 +1835,7 @@ class StepperResonanceTester:
         self.save_to_csv(filename, results, header=csv_header,
                          format_spec='%.4f')
         gcmd.respond_info(
-            ("История калибровки (%d измерений) сохранена в %s" if self.vfa_ru else
-                "Search calibration history (%d measurements) saved to %s")
+            "Search calibration history (%d measurements) saved to %s"
             % (len(results), filename))
 
         if own_pending:
@@ -1904,9 +1844,8 @@ class StepperResonanceTester:
             return
 
         gcmd.respond_info(
-            ("Команда SAVE_CONFIG сохранит конфигурацию и перезапустит принтер." if self.vfa_ru else
-                "The SAVE_CONFIG command will update the printer config\n"
-            "file and restart the printer."))
+            "The SAVE_CONFIG command will update the printer config\n"
+            "file and restart the printer.")
 
     def refine_calibrate_one_direction(self, gcmd, tdx, direction,
                                        init_amp, init_phase,
