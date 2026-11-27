@@ -211,10 +211,13 @@ class PrinterPWMLED:
         for idx, mcu_pin in self.pins:
             mcu_pin.setup_start_value(color[idx], 0.)
     def update_leds(self, led_state, print_time):
+        mcu = self.pins[0][1].get_mcu()
+        eventtime = self.printer.get_reactor().monotonic()
+        min_print_time = mcu.estimated_print_time(eventtime) + PIN_MIN_TIME
         if print_time is None:
-            eventtime = self.printer.get_reactor().monotonic()
-            mcu = self.pins[0][1].get_mcu()
-            print_time = mcu.estimated_print_time(eventtime) + PIN_MIN_TIME
+            print_time = min_print_time
+        elif not mcu.is_fileoutput():
+            print_time = max(print_time, min_print_time)
         print_time = max(print_time, self.last_print_time + PIN_MIN_TIME)
         color = led_state[0]
         for idx, mcu_pin in self.pins:

@@ -55,6 +55,11 @@ class Fan:
         if value == self.last_fan_value:
             self.last_command_value = value
             return
+        mcu = self.mcu_fan.get_mcu()
+        if not mcu.is_fileoutput():
+            eventtime = self.printer.get_reactor().monotonic()
+            min_print_time = mcu.estimated_print_time(eventtime) + FAN_MIN_TIME
+            print_time = max(print_time, min_print_time)
         print_time = max(self.last_fan_time + FAN_MIN_TIME, print_time)
         if self.enable_pin:
             if value > 0 and self.last_fan_value == 0:
